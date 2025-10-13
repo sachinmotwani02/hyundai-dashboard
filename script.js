@@ -14,16 +14,6 @@ function updateCompletedCount() {
 checkboxes.forEach(checkbox => {
     checkbox.addEventListener('change', (e) => {
         updateCompletedCount();
-
-        // Add visual feedback to the checklist item
-        const item = e.target.closest('.checklist-item');
-        if (e.target.checked) {
-            item.style.background = '#f0fdf7';
-            item.style.borderColor = '#00d6a3';
-        } else {
-            item.style.background = '#ffffff';
-            item.style.borderColor = '#e5e8eb';
-        }
     });
 });
 
