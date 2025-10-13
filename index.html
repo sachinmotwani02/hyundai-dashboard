@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyundai Quality Control Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="main-content">
+            <!-- Top Checklist Row -->
+            <div class="checklist-row top-row">
+                <div class="checklist-item">
+                    <input type="checkbox" id="tail-left" class="checkbox" checked>
+                    <label for="tail-left">Tail Light Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="tail-right" class="checkbox" checked>
+                    <label for="tail-right">Tail Light Right</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="drl-low-left" class="checkbox" checked>
+                    <label for="drl-low-left">DRL Low Beam Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="drl-high-left" class="checkbox" checked>
+                    <label for="drl-high-left">DRL High Beam Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="front-fog-left" class="checkbox">
+                    <label for="front-fog-left">Front Fog Light Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="front-fog-right" class="checkbox">
+                    <label for="front-fog-right">Front Fog Light Right</label>
+                </div>
+            </div>
+
+            <!-- Middle Section with Left Column, Videos, Right Column -->
+            <div class="middle-section">
+                <!-- Left Side Checklist -->
+                <div class="checklist-column left-column">
+                    <div class="checklist-item">
+                        <input type="checkbox" id="hazard-left" class="checkbox">
+                        <label for="hazard-left">Hazard Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="hazard-right" class="checkbox">
+                        <label for="hazard-right">Hazard Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="parking-left" class="checkbox">
+                        <label for="parking-left">Parking Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="parking-right" class="checkbox">
+                        <label for="parking-right">Parking Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="cornering-left" class="checkbox">
+                        <label for="cornering-left">Cornering Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="cornering-right" class="checkbox">
+                        <label for="cornering-right">Cornering Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="adaptive-front-left" class="checkbox">
+                        <label for="adaptive-front-left">Adaptive Front Light Left</label>
+                    </div>
+                </div>
+
+                <!-- Video Feed Grid -->
+                <div class="videos-container">
+                    <div class="video-wrapper">
+                        <img src="scene-1.png" alt="Front View" class="vehicle-image">
+                    </div>
+                    <div class="video-wrapper">
+                        <img src="scene-2.png" alt="Right View" class="vehicle-image">
+                    </div>
+                    <div class="video-wrapper">
+                        <img src="scene-3.png" alt="Left View" class="vehicle-image">
+                    </div>
+                    <div class="video-wrapper">
+                        <img src="scene-4.png" alt="Back View" class="vehicle-image">
+                    </div>
+                </div>
+
+                <!-- Right Side Checklist -->
+                <div class="checklist-column right-column">
+                    <div class="checklist-item">
+                        <input type="checkbox" id="rear-fog-left" class="checkbox">
+                        <label for="rear-fog-left">Rear Fog Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="rear-fog-right" class="checkbox">
+                        <label for="rear-fog-right">Rear Fog Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="license-left" class="checkbox">
+                        <label for="license-left">License Plate Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="license-right" class="checkbox">
+                        <label for="license-right">License Plate Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="side-marker-left" class="checkbox">
+                        <label for="side-marker-left">Side Marker Light Left</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="side-marker-right" class="checkbox">
+                        <label for="side-marker-right">Side Marker Light Right</label>
+                    </div>
+                    <div class="checklist-item">
+                        <input type="checkbox" id="reverse-left" class="checkbox">
+                        <label for="reverse-left">Reverse Light Left</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Checklist Row -->
+            <div class="checklist-row bottom-row">
+                <div class="checklist-item">
+                    <input type="checkbox" id="adaptive-front-right" class="checkbox">
+                    <label for="adaptive-front-right">Adaptive Front Light Right</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="brake-left" class="checkbox">
+                    <label for="brake-left">Brake Light Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="brake-right" class="checkbox">
+                    <label for="brake-right">Brake Light Right</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="turn-signal-left" class="checkbox">
+                    <label for="turn-signal-left">Turn Signal Light Left</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="turn-signal-right" class="checkbox">
+                    <label for="turn-signal-right">Turn Signal Light Right</label>
+                </div>
+                <div class="checklist-item">
+                    <input type="checkbox" id="reverse-light-right" class="checkbox">
+                    <label for="reverse-light-right">Reverse Light Right</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
