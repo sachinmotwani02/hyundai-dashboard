@@ -24,7 +24,7 @@ body {
     height: 100vh;
     margin: 0;
     background: transparent;
-    padding: 100px 50px 30px 50px;
+    padding: 90px 40px 40px 40px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -114,175 +114,51 @@ body {
     height: 55px;
 }
 
-.main-content {
+/* Main Layout - Optimized for 24" 16:9 TV (1920x1080) */
+.main-layout {
     width: 100%;
     max-width: 1920px;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    display: grid;
+    grid-template-columns: 380px 1fr 380px;
+    gap: 28px;
     position: relative;
     z-index: 1;
 }
 
-/* Top and Bottom Checklist Rows */
-.checklist-row {
-    display: flex;
-    justify-content: center;
-    align-items: stretch;
-    gap: 16px;
-    padding: 0;
-    flex-shrink: 0;
-}
-
-.top-row {
-    margin-bottom: 0;
-}
-
-.bottom-row {
-    margin-top: 0;
-}
-
-/* Middle Section Layout - Fixed grid, no wrapping */
-.middle-section {
-    display: grid;
-    grid-template-columns: minmax(200px, 220px) 1fr minmax(200px, 220px);
-    gap: 20px;
-    align-items: stretch;
-    flex: 1;
-    min-height: 0;
-}
-
-/* Side Columns - Fixed vertical layout */
-.checklist-column {
+/* Side Columns */
+.left-column,
+.right-column {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: stretch;
-    gap: 12px;
-    padding: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    gap: 28px;
 }
 
-/* Checklist Items */
-.checklist-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    background: #ffffff;
-    border: 1.5px solid #e5e8eb;
-    border-radius: 8px;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    min-height: 42px;
-    position: relative;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.checklist-item:hover {
-    background: #fafbfc;
-    border-color: #00d6a3;
-}
-
-.checklist-item label {
-    cursor: pointer;
-    user-select: none;
-    font-size: 14px;
-    font-weight: 500;
-    color: #2c3e50;
-    flex: 1;
-    line-height: 1.4;
-    letter-spacing: -0.01em;
-}
-
-/* Custom Checkbox */
-.checkbox {
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    border: 2px solid #cbd5e0;
-    border-radius: 6px;
-    cursor: pointer;
-    position: relative;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    flex-shrink: 0;
-    background: #fff;
-}
-
-.checkbox:hover {
-    border-color: #00d6a3;
-}
-
-.checkbox:checked {
-    background: linear-gradient(135deg, #00d6a3 0%, #00b386 100%);
-    border-color: #00d6a3;
-}
-
-/* Checked checkbox parent styling */
-.checkbox:checked ~ label {
-    color: #047857;
-}
-
-.checklist-item:has(.checkbox:checked) {
-    background: #f0fdf7;
-    border-color: #86efac;
-}
-
-.checkbox:checked::after {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    animation: checkmark 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes checkmark {
-    0% {
-        transform: translate(-50%, -50%) scale(0);
-        opacity: 0;
-    }
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 1;
-    }
-}
-
-/* Videos Container - Fixed 2x2 grid */
+/* Videos Container - Center 2x2 Grid */
 .videos-container {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 16px;
+    gap: 20px;
     padding: 0;
     width: 100%;
     height: 100%;
-    min-height: 0;
 }
 
 .video-wrapper {
-    aspect-ratio: 16/9;
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
     position: relative;
     background: #fff;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
     height: 100%;
-    min-height: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .video-wrapper:hover {
-    opacity: 0.95;
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .vehicle-image {
@@ -292,10 +168,190 @@ body {
     display: block;
 }
 
+/* Inspection Card Styles */
+.inspection-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 14px;
+    padding: 0;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    flex: 1;
+}
+
+.inspection-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.15);
+}
+
+/* Card Header */
+.card-header {
+    padding: 20px 24px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0;
+    letter-spacing: 0.1em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* Car SVG Container */
+.car-svg-container {
+    padding: 32px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 250, 252, 0.8) 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    min-height: 130px;
+}
+
+.car-svg {
+    width: auto;
+    height: 75px;
+    max-width: 100%;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
+    transition: transform 0.3s ease;
+    object-fit: contain;
+}
+
+.car-svg-flip {
+    transform: scaleX(-1);
+}
+
+.inspection-card:hover .car-svg {
+    transform: scale(1.1);
+}
+
+.inspection-card:hover .car-svg-flip {
+    transform: scaleX(-1) scale(1.1);
+}
+
+/* Checklist Container */
+.checklist-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.checklist-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.checklist-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.checklist-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.checklist-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Checklist Item */
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: #ffffff;
+    border: 2.5px solid #e5e8eb;
+    border-radius: 10px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    min-height: 56px;
+}
+
+.checklist-item:hover {
+    background: #f8fafc;
+    border-color: #00d6a3;
+    transform: translateX(3px);
+}
+
+.checklist-item label {
+    cursor: pointer;
+    user-select: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+    flex: 1;
+    line-height: 1.5;
+    letter-spacing: 0.015em;
+}
+
+/* Custom Checkbox */
+.checkbox {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+}
+
+.checkbox:hover {
+    border-color: #00d6a3;
+    background: rgba(0, 214, 163, 0.05);
+}
+
+.checkbox:checked {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+.checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 2px;
+    width: 5px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox:checked ~ label {
+    color: #047857;
+    font-weight: 600;
+}
+
+.checklist-item:has(.checkbox:checked) {
+    background: #f0fdf7;
+    border-color: #86efac;
+}
+
 /* Print Styles */
 @media print {
     body {
         background: white;
+    }
+
+    .dashboard-container::before,
+    .dashboard-container::after {
+        display: none;
     }
 
     .dashboard-container {
