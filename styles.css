@@ -137,13 +137,19 @@ body {
 
 /* Videos Container - Center 2x2 Grid */
 .videos-container {
+    display: block;
+    width: 100%;
+    min-height: 600px;
+    position: relative;
+}
+
+/* Fallback grid for static images */
+.videos-container:has(.video-wrapper) {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
     gap: 16px;
     padding: 0;
-    width: 100%;
-    min-height: 600px;
 }
 
 .video-wrapper {
