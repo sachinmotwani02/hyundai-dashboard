@@ -108,9 +108,16 @@ async function loadLiveVideos() {
         const html = await response.text();
 
         // Successfully fetched live video HTML
+        console.log('Received HTML length:', html.length);
+        console.log('HTML preview:', html.substring(0, 200));
+
         videosContainer.innerHTML = html;
         isLiveVideoLoaded = true;
+
         console.log('Live video feed loaded successfully');
+        console.log('Videos container children:', videosContainer.children.length);
+        console.log('Container display:', window.getComputedStyle(videosContainer).display);
+        console.log('Container height:', window.getComputedStyle(videosContainer).height);
     } catch (error) {
         console.error('Error loading live videos:', error);
         console.log('Falling back to static images');
