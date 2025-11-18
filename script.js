@@ -107,11 +107,17 @@ async function loadLiveVideos() {
         }
         const html = await response.text();
 
-        // Successfully fetched live video HTML
         console.log('Received HTML length:', html.length);
         console.log('HTML preview:', html.substring(0, 200));
 
-        videosContainer.innerHTML = html;
+        // Extract body content from full HTML document
+        // Create a temporary DOM parser to extract body content
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const bodyContent = doc.body ? doc.body.innerHTML : html;
+
+        // Insert the extracted body content
+        videosContainer.innerHTML = bodyContent;
         isLiveVideoLoaded = true;
 
         console.log('Live video feed loaded successfully');
