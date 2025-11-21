@@ -3,39 +3,16 @@ const API_URL = 'http://localhost:5000/light_status';
 const LIVE_VIDEO_URL = 'http://localhost:5000/live';
 const POLL_INTERVAL = 1000; // Poll every 1 second
 
-// Checkbox sequences matching the frontend layout
-const checkboxSequence = {
-    front: [
-        'headlamp-low',
-        'headlamp-high',
-        'drl',
-        'front-fog',
-        'turn-signal-front',
-        'license-plate-front'
-    ],
-    left_side: [
-        'door-handle-left',
-        'repeater-lamp-left',
-        'wheel-nuts-left',
-        'hub-cap-left',
-        'fender-left'
-    ],
-    right_side: [
-        'door-handle-right',
-        'repeater-lamp-right',
-        'wheel-nuts-right',
-        'hub-cap-right',
-        'fender-right'
-    ],
-    rear: [
-        'brake-lamp',
-        'reverse-lamp',
-        'rear-fog',
-        'turn-signal-rear',
-        'license-lamp',
-        'license-plate-rear'
-    ]
-};
+// Convert snake_case to Title Case
+function snakeToTitleCase(str) {
+    return str
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
+// Store current checkboxes structure
+let currentCheckboxStructure = null;
 
 // DOM Elements
 const checkboxes = document.querySelectorAll('.checkbox');
@@ -49,47 +26,68 @@ function updateCompletedCount() {
     console.log(`Checked: ${checkedCount}/${totalCheckboxes}`);
 }
 
+// Dynamically create checkboxes from API data
+function createCheckboxesFromData(data) {
+    const sections = {
+        front: document.querySelector('.left-column .inspection-card:nth-child(1) .checklist-container'),
+        left_side: document.querySelector('.left-column .inspection-card:nth-child(2) .checklist-container'),
+        right_side: document.querySelector('.right-column .inspection-card:nth-child(1) .checklist-container'),
+        rear: document.querySelector('.right-column .inspection-card:nth-child(2) .checklist-container')
+    };
+
+    for (const sectionName in sections) {
+        const container = sections[sectionName];
+        const sectionData = data[sectionName];
+
+        if (container && sectionData && typeof sectionData === 'object') {
+            container.innerHTML = '';
+
+            for (const key in sectionData) {
+                const checkboxId = `${sectionName}-${key}`;
+                const label = snakeToTitleCase(key);
+                const isChecked = sectionData[key] === 1;
+
+                const itemHTML = `
+                    <div class="checklist-item">
+                        <input type="checkbox" id="${checkboxId}" class="checkbox" ${isChecked ? 'checked' : ''}>
+                        <label for="${checkboxId}">${label}</label>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', itemHTML);
+            }
+        }
+    }
+
+    // Update total checkboxes count
+    totalCheckboxes = document.querySelectorAll('.checkbox').length;
+}
+
 // Update checkboxes based on API data
 function updateCheckboxes(data) {
     try {
-        // Update Front checkboxes
-        if (data.front && Array.isArray(data.front)) {
-            checkboxSequence.front.forEach((id, index) => {
-                const checkbox = document.getElementById(id);
-                if (checkbox && index < data.front.length) {
-                    checkbox.checked = data.front[index] === 1;
-                }
-            });
-        }
+        // Check if structure has changed, if so recreate checkboxes
+        const dataStructure = JSON.stringify(Object.keys(data).reduce((acc, section) => {
+            acc[section] = data[section] ? Object.keys(data[section]) : [];
+            return acc;
+        }, {}));
 
-        // Update Left side checkboxes
-        if (data.left_side && Array.isArray(data.left_side)) {
-            checkboxSequence.left_side.forEach((id, index) => {
-                const checkbox = document.getElementById(id);
-                if (checkbox && index < data.left_side.length) {
-                    checkbox.checked = data.left_side[index] === 1;
+        if (currentCheckboxStructure !== dataStructure) {
+            createCheckboxesFromData(data);
+            currentCheckboxStructure = dataStructure;
+        } else {
+            // Just update checkbox states
+            for (const sectionName in data) {
+                const sectionData = data[sectionName];
+                if (sectionData && typeof sectionData === 'object') {
+                    for (const key in sectionData) {
+                        const checkboxId = `${sectionName}-${key}`;
+                        const checkbox = document.getElementById(checkboxId);
+                        if (checkbox) {
+                            checkbox.checked = sectionData[key] === 1;
+                        }
+                    }
                 }
-            });
-        }
-
-        // Update Right side checkboxes
-        if (data.right_side && Array.isArray(data.right_side)) {
-            checkboxSequence.right_side.forEach((id, index) => {
-                const checkbox = document.getElementById(id);
-                if (checkbox && index < data.right_side.length) {
-                    checkbox.checked = data.right_side[index] === 1;
-                }
-            });
-        }
-
-        // Update Rear checkboxes
-        if (data.rear && Array.isArray(data.rear)) {
-            checkboxSequence.rear.forEach((id, index) => {
-                const checkbox = document.getElementById(id);
-                if (checkbox && index < data.rear.length) {
-                    checkbox.checked = data.rear[index] === 1;
-                }
-            });
+            }
         }
 
         updateCompletedCount();
