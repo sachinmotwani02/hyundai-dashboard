@@ -1,25 +1,22 @@
 // API Configuration
-const LIGHT_STATUS_URL = 'http://localhost:5000/light_status';
-const PARTS_STATUS_URL = 'http://localhost:5000/parts_status';
+const STATUS_URL = 'http://localhost:5000/light_status'; // Single endpoint for both lamps and parts
 const LIVE_VIDEO_URL = 'http://localhost:5000/live';
 const POLL_INTERVAL = 1000; // Poll every 1 second
 
-// Convert snake_case to Title Case
-function snakeToTitleCase(str) {
+// Convert snake_case or space-separated to Title Case
+function toTitleCase(str) {
     return str
-        .split('_')
+        .split(/[_\s]+/)
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
 }
 
 // Store current checkboxes structure
-let currentLightStructure = null;
-let currentPartsStructure = null;
+let currentStructure = null;
 
 // DOM Elements
-const checkboxes = document.querySelectorAll('.checkbox');
 const videosContainer = document.querySelector('.videos-container');
-let totalCheckboxes = checkboxes.length;
+let totalCheckboxes = 0;
 let isLiveVideoLoaded = false;
 
 // Update completed count
@@ -30,16 +27,26 @@ function updateCompletedCount() {
 
 // Dynamically create checkboxes from API data
 function createChecklistColumn(container, sectionName, sectionData, type) {
-    if (!container || !sectionData || typeof sectionData !== 'object') return;
+    if (!container || !sectionData || typeof sectionData !== 'object') {
+        if (container) {
+            container.innerHTML = '<div class="no-items">No items</div>';
+        }
+        return;
+    }
 
     // Convert to array and sort: unchecked (0) first, checked (1) last
     const items = Object.entries(sectionData).sort((a, b) => a[1] - b[1]);
 
+    if (items.length === 0) {
+        container.innerHTML = '<div class="no-items">No items</div>';
+        return;
+    }
+
     container.innerHTML = '';
 
     items.forEach(([key, value]) => {
-        const checkboxId = `${type}-${sectionName}-${key}`;
-        const label = snakeToTitleCase(key);
+        const checkboxId = `${type}-${sectionName}-${key.replace(/\s+/g, '-')}`;
+        const label = toTitleCase(key);
         const isChecked = value === 1;
 
         const itemHTML = `
@@ -52,7 +59,28 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     });
 }
 
-function createCheckboxesFromData(lightData, partsData) {
+// Map API response to UI sections
+function mapApiDataToSections(apiData) {
+    // Extract lamps data (front and rear only have lamps in your API)
+    const lampsData = {
+        front: apiData.front || null,
+        left_side: null, // No lamps for left side in the API
+        right_side: null, // No lamps for right side in the API
+        rear: apiData.rear || null
+    };
+
+    // Extract parts data
+    const partsData = {
+        front: apiData.front_parts || null,
+        left_side: apiData.left_side_parts || null,
+        right_side: apiData.right_side_parts || null,
+        rear: apiData.rear_parts || null
+    };
+
+    return { lampsData, partsData };
+}
+
+function createCheckboxesFromData(lampsData, partsData) {
     const sections = {
         front: {
             card: document.querySelector('.left-column .inspection-card:nth-child(1)'),
@@ -80,6 +108,10 @@ function createCheckboxesFromData(lightData, partsData) {
         const section = sections[sectionName];
         if (!section.card) continue;
 
+        // Check if we have data for this section
+        const hasParts = partsData && partsData[sectionName] && Object.keys(partsData[sectionName]).length > 0;
+        const hasLamps = lampsData && lampsData[sectionName] && Object.keys(lampsData[sectionName]).length > 0;
+
         // Find or create the dual checklist container
         let dualContainer = section.card.querySelector('.dual-checklist-container');
         if (!dualContainer) {
@@ -90,16 +122,41 @@ function createCheckboxesFromData(lightData, partsData) {
             // Create new dual container structure
             dualContainer = document.createElement('div');
             dualContainer.className = 'dual-checklist-container';
-            dualContainer.innerHTML = `
-                <div class="checklist-column">
-                    <h3 class="checklist-heading">Parts Check</h3>
-                    <div class="checklist-container parts-checklist"></div>
-                </div>
-                <div class="checklist-column">
-                    <h3 class="checklist-heading">Lamp Check</h3>
-                    <div class="checklist-container lights-checklist"></div>
-                </div>
-            `;
+            
+            // Only show columns that have data
+            if (hasParts && hasLamps) {
+                dualContainer.innerHTML = `
+                    <div class="checklist-column">
+                        <h3 class="checklist-heading">Parts Check</h3>
+                        <div class="checklist-container parts-checklist"></div>
+                    </div>
+                    <div class="checklist-column">
+                        <h3 class="checklist-heading">Lamp Check</h3>
+                        <div class="checklist-container lights-checklist"></div>
+                    </div>
+                `;
+            } else if (hasParts) {
+                dualContainer.innerHTML = `
+                    <div class="checklist-column single-column">
+                        <h3 class="checklist-heading">Parts Check</h3>
+                        <div class="checklist-container parts-checklist"></div>
+                    </div>
+                `;
+            } else if (hasLamps) {
+                dualContainer.innerHTML = `
+                    <div class="checklist-column single-column">
+                        <h3 class="checklist-heading">Lamp Check</h3>
+                        <div class="checklist-container lights-checklist"></div>
+                    </div>
+                `;
+            } else {
+                dualContainer.innerHTML = `
+                    <div class="checklist-column single-column">
+                        <div class="no-items">No inspection items</div>
+                    </div>
+                `;
+            }
+            
             section.card.appendChild(dualContainer);
         }
 
@@ -107,13 +164,13 @@ function createCheckboxesFromData(lightData, partsData) {
         section.lightsContainer = section.card.querySelector('.lights-checklist');
 
         // Populate parts checklist
-        if (partsData && partsData[sectionName]) {
+        if (section.partsContainer && partsData && partsData[sectionName]) {
             createChecklistColumn(section.partsContainer, sectionName, partsData[sectionName], 'parts');
         }
 
         // Populate lights checklist
-        if (lightData && lightData[sectionName]) {
-            createChecklistColumn(section.lightsContainer, sectionName, lightData[sectionName], 'lights');
+        if (section.lightsContainer && lampsData && lampsData[sectionName]) {
+            createChecklistColumn(section.lightsContainer, sectionName, lampsData[sectionName], 'lamps');
         }
     }
 
@@ -121,59 +178,39 @@ function createCheckboxesFromData(lightData, partsData) {
     totalCheckboxes = document.querySelectorAll('.checkbox').length;
 }
 
-// Fetch and update light status
-let cachedLightData = null;
-let cachedPartsData = null;
+// Cached API data
+let cachedApiData = null;
 
-async function fetchLightStatus() {
+// Fetch status from unified endpoint
+async function fetchStatus() {
     try {
-        const response = await fetch(LIGHT_STATUS_URL);
+        const response = await fetch(STATUS_URL);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        cachedLightData = await response.json();
+        cachedApiData = await response.json();
         updateCheckboxes();
     } catch (error) {
-        console.error('Error fetching light status:', error);
-    }
-}
-
-async function fetchPartsStatus() {
-    try {
-        const response = await fetch(PARTS_STATUS_URL);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        cachedPartsData = await response.json();
-        updateCheckboxes();
-    } catch (error) {
-        console.error('Error fetching parts status:', error);
+        console.error('Error fetching status:', error);
     }
 }
 
 // Update checkboxes based on API data
 function updateCheckboxes() {
     try {
-        if (!cachedLightData && !cachedPartsData) return;
+        if (!cachedApiData) return;
+
+        // Map API data to sections
+        const { lampsData, partsData } = mapApiDataToSections(cachedApiData);
 
         // Always recreate to ensure proper sorting based on current state
-        createCheckboxesFromData(cachedLightData, cachedPartsData);
+        createCheckboxesFromData(lampsData, partsData);
 
         // Update the structure tracking
-        if (cachedLightData) {
-            const lightStructure = JSON.stringify(Object.keys(cachedLightData).reduce((acc, section) => {
-                acc[section] = cachedLightData[section] ? Object.keys(cachedLightData[section]) : [];
-                return acc;
-            }, {}));
-            currentLightStructure = lightStructure;
-        }
-
-        if (cachedPartsData) {
-            const partsStructure = JSON.stringify(Object.keys(cachedPartsData).reduce((acc, section) => {
-                acc[section] = cachedPartsData[section] ? Object.keys(cachedPartsData[section]) : [];
-                return acc;
-            }, {}));
-            currentPartsStructure = partsStructure;
+        const newStructure = JSON.stringify(cachedApiData);
+        if (currentStructure !== newStructure) {
+            currentStructure = newStructure;
+            console.log('Structure updated');
         }
 
         updateCompletedCount();
@@ -195,7 +232,6 @@ async function loadLiveVideos() {
         console.log('HTML preview:', html.substring(0, 200));
 
         // Extract body content from full HTML document
-        // Create a temporary DOM parser to extract body content
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         const bodyContent = doc.body ? doc.body.innerHTML : html;
@@ -205,136 +241,17 @@ async function loadLiveVideos() {
         isLiveVideoLoaded = true;
 
         console.log('Live video feed loaded successfully');
-        console.log('Videos container children:', videosContainer.children.length);
-        console.log('Container display:', window.getComputedStyle(videosContainer).display);
-        console.log('Container height:', window.getComputedStyle(videosContainer).height);
     } catch (error) {
         console.error('Error loading live videos:', error);
-        console.log('Falling back to static images');
-
-        // Fallback to static images
-        if (isLiveVideoLoaded) {
-            // If it was previously loaded but now failed, revert to static images
-            videosContainer.innerHTML = `
-                <div class="video-wrapper">
-                    <img src="scene-1.png" alt="Front View" class="vehicle-image">
-                </div>
-                <div class="video-wrapper">
-                    <img src="scene-2.png" alt="Right View" class="vehicle-image">
-                </div>
-                <div class="video-wrapper">
-                    <img src="scene-3.png" alt="Left View" class="vehicle-image">
-                </div>
-                <div class="video-wrapper">
-                    <img src="scene-4.png" alt="Back View" class="vehicle-image">
-                </div>
-            `;
-            isLiveVideoLoaded = false;
-        }
     }
 }
 
-// Test/Mock data for development
-const MOCK_MODE = true; // Set to false when APIs are ready
-
-const mockLightData = {
-    front: {
-        head_lamp_low: 0,
-        head_lamp_high: 1,
-        drl: 0,
-        front_fog_lamp: 1,
-        turn_signal: 1,
-        license_lamp: 0
-    },
-    left_side: {
-        left_position_lamp: 0,
-        left_turn_signal: 1
-    },
-    right_side: {
-        right_position_lamp: 1,
-        right_turn_signal: 0
-    },
-    rear: {
-        left_brake_lamp: 0,
-        right_brake_lamp: 1,
-        mid_brake_lamp: 1,
-        reverse_lamp: 1,
-        rear_fog_lamp: 0,
-        left_turn_signal: 0,
-        right_turn_signal: 0,
-        license_lamp: 1
-    }
-};
-
-const mockPartsData = {
-    front: {
-        fender_molding_lf: 1,
-        fender_molding_rs: 0,
-        fender_emblem_rs: 1,
-        bumper_molding_lf: 0
-    },
-    left_side: {
-        wheel_lf: 1,
-        wheel_hub_cap_lf: 1,
-        wheel_nut_lf: 0,
-        brake_caliper_lf: 1,
-        orvm_mirror_ls: 1,
-        door_handle_lf: 0,
-        door_molding_lf: 1,
-        pillar_garnish_ls: 1
-    },
-    right_side: {
-        wheel_rf: 1,
-        wheel_hub_cap_rf: 0,
-        wheel_nut_rf: 1,
-        brake_caliper_rf: 1,
-        orvm_mirror_rs: 1,
-        door_handle_rf: 1,
-        fender_molding_rs: 0,
-        fender_emblem_rs: 1
-    },
-    rear: {
-        spoiler_garnish_lb: 1,
-        spoiler_garnish_rb: 0,
-        bumper_garnish_lb: 1,
-        bumper_garnish_rb: 1,
-        tape_sash_lb: 0,
-        tape_sash_rb: 1
-    }
-};
-
 // Initialize on page load
 console.log('Hyundai Quality Control Dashboard Initialized');
-console.log('Mock Mode:', MOCK_MODE);
 
 // Load live videos on initialization
 loadLiveVideos();
 
-if (MOCK_MODE) {
-    // Use mock data for testing
-    cachedLightData = mockLightData;
-    cachedPartsData = mockPartsData;
-    updateCheckboxes();
-
-    // Simulate dynamic updates every 3 seconds for testing
-    setInterval(() => {
-        // Randomly change some values to test dynamic sorting
-        const sections = ['front', 'left_side', 'right_side', 'rear'];
-        const randomSection = sections[Math.floor(Math.random() * sections.length)];
-        const sectionData = mockLightData[randomSection];
-        const keys = Object.keys(sectionData);
-        const randomKey = keys[Math.floor(Math.random() * keys.length)];
-        mockLightData[randomSection][randomKey] = mockLightData[randomSection][randomKey] === 1 ? 0 : 1;
-
-        cachedLightData = mockLightData;
-        updateCheckboxes();
-    }, 3000);
-} else {
-    // Start polling for both light and parts status
-    fetchLightStatus();
-    fetchPartsStatus();
-    setInterval(() => {
-        fetchLightStatus();
-        fetchPartsStatus();
-    }, POLL_INTERVAL);
-}
+// Start polling for status from API
+fetchStatus();
+setInterval(fetchStatus, POLL_INTERVAL);
