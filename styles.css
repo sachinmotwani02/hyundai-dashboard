@@ -262,11 +262,6 @@ body {
     min-width: 0;
 }
 
-.checklist-column.single-column {
-    flex: 1;
-    max-width: 100%;
-}
-
 .checklist-heading {
     font-size: 10px;
     font-weight: 700;
@@ -279,18 +274,6 @@ body {
     border-radius: 5px;
     text-align: center;
     flex-shrink: 0;
-}
-
-/* No items placeholder */
-.no-items {
-    color: #94a3b8;
-    font-size: 11px;
-    font-style: italic;
-    text-align: center;
-    padding: 16px 10px;
-    background: rgba(148, 163, 184, 0.05);
-    border-radius: 6px;
-    border: 1px dashed rgba(148, 163, 184, 0.3);
 }
 
 /* Checklist Container */
