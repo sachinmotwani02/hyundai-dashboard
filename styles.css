@@ -9,28 +9,28 @@
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: #f8f9fa;
-    min-height: 100vh;
+    height: 100vh;
     width: 100vw;
     padding: 0;
     margin: 0;
     color: #1a1a1a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 .dashboard-container {
     width: 100vw;
-    min-height: 100vh;
+    height: 100vh;
     margin: 0;
     background: transparent;
-    padding: 90px 20px 20px 20px;
+    padding: 70px 16px 12px 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     position: relative;
+    overflow: hidden;
 }
 
 /* Aurora Background Effect */
@@ -83,17 +83,17 @@ body {
     display: flex;
     justify-content: flex-start;
     align-items: center;
-    gap: 16px;
-    padding: 10px 20px;
+    gap: 12px;
+    padding: 8px 16px;
     position: absolute;
-    top: 15px;
-    left: 20px;
+    top: 12px;
+    left: 16px;
     z-index: 10;
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1.5px solid rgba(255, 255, 255, 0.9);
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
@@ -102,29 +102,31 @@ body {
 }
 
 .logo {
-    height: 45px;
+    height: 36px;
     width: auto;
     object-fit: contain;
 }
 
 .hyundai-logo {
-    height: 38px;
+    height: 32px;
 }
 
 .defect-logo {
-    height: 42px;
+    height: 34px;
 }
 
 /* Main Layout - Optimized for 24" TV Screen (1920x1080) */
 .main-layout {
     width: 100%;
     max-width: 100%;
-    height: 100%;
+    flex: 1;
     display: grid;
-    grid-template-columns: 340px 1fr 340px;
-    gap: 16px;
+    grid-template-columns: 300px 1fr 300px;
+    gap: 12px;
     position: relative;
     z-index: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* Side Columns */
@@ -132,24 +134,22 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* Videos Container - Center 2x2 Grid */
 .videos-container {
-    display: block;
-    width: 100%;
-    min-height: 700px;
-    position: relative;
-}
-
-/* Fallback grid for static images */
-.videos-container:has(.video-wrapper) {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 16px;
-    padding: 0;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .video-wrapper {
@@ -178,7 +178,7 @@ body {
 /* Inspection Card Styles */
 .inspection-card {
     background: rgba(255, 255, 255, 0.95);
-    border-radius: 12px;
+    border-radius: 10px;
     padding: 0;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     overflow: hidden;
@@ -189,6 +189,7 @@ body {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     flex: 1;
+    min-height: 0;
 }
 
 .inspection-card:hover {
@@ -198,13 +199,14 @@ body {
 
 /* Card Header */
 .card-header {
-    padding: 14px 16px;
+    padding: 10px 12px;
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    flex-shrink: 0;
 }
 
 .card-title {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 700;
     color: #2c3e50;
     margin: 0;
@@ -215,18 +217,19 @@ body {
 
 /* Car SVG Container */
 .car-svg-container {
-    padding: 16px;
+    padding: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 250, 252, 0.8) 100%);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-    min-height: 90px;
+    min-height: 70px;
+    flex-shrink: 0;
 }
 
 .car-svg {
     width: auto;
-    height: 55px;
+    height: 45px;
     max-width: 100%;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
     transition: transform 0.3s ease;
@@ -248,30 +251,33 @@ body {
 /* Dual Checklist Container */
 .dual-checklist-container {
     display: flex;
-    gap: 8px;
-    padding: 10px;
+    gap: 6px;
+    padding: 8px;
     flex: 1;
     overflow: hidden;
+    min-height: 0;
 }
 
 .checklist-column {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .checklist-heading {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin: 0;
-    padding: 5px 6px;
+    padding: 4px 5px;
     background: rgba(100, 116, 139, 0.08);
-    border-radius: 5px;
+    border-radius: 4px;
     text-align: center;
     flex-shrink: 0;
 }
@@ -281,9 +287,10 @@ body {
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     overflow-y: auto;
     flex: 1;
+    min-height: 0;
 }
 
 .checklist-container::-webkit-scrollbar {
@@ -307,15 +314,16 @@ body {
 .checklist-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 5px 8px;
     background: #ffffff;
-    border: 2px solid #e5e8eb;
-    border-radius: 6px;
+    border: 1.5px solid #e5e8eb;
+    border-radius: 5px;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     position: relative;
-    min-height: 36px;
+    min-height: 28px;
+    flex-shrink: 0;
 }
 
 .checklist-item:hover {
@@ -327,7 +335,7 @@ body {
 .checklist-item label {
     cursor: pointer;
     user-select: none;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 500;
     color: #2c3e50;
     flex: 1;
@@ -338,10 +346,10 @@ body {
 /* Custom Checkbox - Red Cross for unchecked, Green Check for checked */
 .checkbox {
     appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #ef4444;
-    border-radius: 4px;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #ef4444;
+    border-radius: 3px;
     cursor: pointer;
     position: relative;
     flex-shrink: 0;
@@ -355,8 +363,8 @@ body {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 10px;
-    height: 2px;
+    width: 8px;
+    height: 1.5px;
     background: #ef4444;
     transform: translate(-50%, -50%) rotate(45deg);
 }
@@ -366,8 +374,8 @@ body {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 10px;
-    height: 2px;
+    width: 8px;
+    height: 1.5px;
     background: #ef4444;
     transform: translate(-50%, -50%) rotate(-45deg);
 }
@@ -390,12 +398,12 @@ body {
 .checkbox:checked::after {
     content: '';
     position: absolute;
-    left: 5px;
+    left: 4px;
     top: 1px;
-    width: 4px;
-    height: 9px;
+    width: 3px;
+    height: 7px;
     border: solid white;
-    border-width: 0 2px 2px 0;
+    border-width: 0 1.5px 1.5px 0;
     background: transparent;
     transform: rotate(45deg);
 }
@@ -419,6 +427,42 @@ body {
 .checklist-item:has(.checkbox:checked) {
     background: #f0fdf7;
     border-color: #86efac;
+}
+
+/* Parts Checklist - Amber/Yellow styling for unchecked (informational) */
+.parts-checklist .checklist-item {
+    background: #fffbeb;
+    border-color: #fcd34d;
+}
+
+.parts-checklist .checklist-item label {
+    color: #b45309;
+}
+
+.parts-checklist .checkbox {
+    border-color: #f59e0b;
+    background: #fef3c7;
+}
+
+.parts-checklist .checkbox::before,
+.parts-checklist .checkbox::after {
+    background: #f59e0b;
+}
+
+.parts-checklist .checkbox:hover {
+    border-color: #d97706;
+    background: #fde68a;
+}
+
+/* Parts Checklist - Checked items remain green */
+.parts-checklist .checklist-item:has(.checkbox:checked) {
+    background: #f0fdf7;
+    border-color: #86efac;
+}
+
+.parts-checklist .checkbox:checked {
+    background: #10b981;
+    border-color: #10b981;
 }
 
 /* Print Styles */
