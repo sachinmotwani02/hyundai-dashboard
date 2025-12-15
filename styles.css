@@ -152,6 +152,21 @@ body {
     overflow: hidden;
 }
 
+/* Ensure any content inside videos container fills the space */
+.videos-container > * {
+    width: 100%;
+    height: 100%;
+}
+
+.videos-container img,
+.videos-container video,
+.videos-container iframe {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
 .video-wrapper {
     border-radius: 12px;
     overflow: hidden;
