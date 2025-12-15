@@ -509,6 +509,11 @@ body {
     transform: rotate(45deg);
 }
 
+.parts-checklist .checkbox:checked ~ label {
+    color: #047857;
+    font-weight: 600;
+}
+
 /* Print Styles */
 @media print {
     body {
