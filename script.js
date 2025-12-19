@@ -1,7 +1,15 @@
 // API Configuration
-const STATUS_URL = 'http://localhost:5000/light_status'; // Single endpoint for both lamps and parts
-const LIVE_VIDEO_URL = 'http://localhost:5000/live';
+let currentPort = 5000; // Default port (Booth 1)
 const POLL_INTERVAL = 1000; // Poll every 1 second
+
+// Dynamic URL getters
+function getStatusUrl() {
+    return `http://localhost:${currentPort}/light_status`;
+}
+
+function getLiveVideoUrl() {
+    return `http://localhost:${currentPort}/live`;
+}
 
 // Convert snake_case or space-separated to Title Case
 function toTitleCase(str) {
@@ -184,7 +192,7 @@ let cachedApiData = null;
 // Fetch status from unified endpoint
 async function fetchStatus() {
     try {
-        const response = await fetch(STATUS_URL);
+        const response = await fetch(getStatusUrl());
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -222,7 +230,7 @@ function updateCheckboxes() {
 // Fetch and load live video feed
 async function loadLiveVideos() {
     try {
-        const response = await fetch(LIVE_VIDEO_URL);
+        const response = await fetch(getLiveVideoUrl());
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -244,6 +252,29 @@ async function loadLiveVideos() {
     } catch (error) {
         console.error('Error loading live videos:', error);
     }
+}
+
+// Booth selector event handler
+function handleBoothChange(port) {
+    currentPort = parseInt(port);
+    console.log(`Switched to Booth on port ${currentPort}`);
+
+    // Reset cached data and structure
+    cachedApiData = null;
+    currentStructure = null;
+    isLiveVideoLoaded = false;
+
+    // Reload everything for the new booth
+    loadLiveVideos();
+    fetchStatus();
+}
+
+// Initialize booth selector
+const boothSelect = document.getElementById('booth-select');
+if (boothSelect) {
+    boothSelect.addEventListener('change', (e) => {
+        handleBoothChange(e.target.value);
+    });
 }
 
 // Initialize on page load

@@ -115,6 +115,58 @@ body {
     height: 34px;
 }
 
+/* Booth Selector */
+.booth-selector {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.booth-selector label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2c3e50;
+    letter-spacing: 0.02em;
+}
+
+.booth-selector select {
+    padding: 6px 28px 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2c3e50;
+    background: #ffffff;
+    border: 1.5px solid #e5e8eb;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232c3e50' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6,9 12,15 18,9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.booth-selector select:hover {
+    border-color: #667eea;
+    background-color: #f8fafc;
+}
+
+.booth-selector select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
 /* Main Layout - Optimized for 24" TV Screen (1920x1080) */
 .main-layout {
     width: 100%;
