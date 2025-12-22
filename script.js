@@ -5,8 +5,8 @@ const POLL_INTERVAL = 1000; // Poll every 1 second
 // Booth to port mapping
 const BOOTH_PORTS = {
     1: 5000,
-    2: 5001,
-    3: 5002
+    2: 5005,
+    3: 5010
 };
 
 // Get booth from URL path (/dashboard/1, /dashboard/2, /dashboard/3)
