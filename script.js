@@ -2,6 +2,32 @@
 let currentPort = 5000; // Default port (Booth 1)
 const POLL_INTERVAL = 1000; // Poll every 1 second
 
+// Booth to port mapping
+const BOOTH_PORTS = {
+    1: 5000,
+    2: 5001,
+    3: 5002
+};
+
+// Get booth from URL path (/dashboard/1, /dashboard/2, /dashboard/3)
+function getBoothFromUrl() {
+    const path = window.location.pathname;
+    const match = path.match(/\/dashboard\/(\d+)/);
+    if (match) {
+        const booth = parseInt(match[1]);
+        if (BOOTH_PORTS[booth]) {
+            return booth;
+        }
+    }
+    return 1; // Default to booth 1
+}
+
+// Update URL without page reload
+function updateUrlWithBooth(booth) {
+    const newPath = `/dashboard/${booth}`;
+    window.history.pushState({}, '', newPath);
+}
+
 // Dynamic URL getters
 function getStatusUrl() {
     return `http://localhost:${currentPort}/light_status`;
@@ -255,9 +281,17 @@ async function loadLiveVideos() {
 }
 
 // Booth selector event handler
-function handleBoothChange(port) {
+function handleBoothChange(port, updateUrl = true) {
     currentPort = parseInt(port);
     console.log(`Switched to Booth on port ${currentPort}`);
+
+    // Find booth number from port
+    const boothNumber = Object.keys(BOOTH_PORTS).find(key => BOOTH_PORTS[key] === currentPort);
+
+    // Update URL if needed
+    if (updateUrl && boothNumber) {
+        updateUrlWithBooth(boothNumber);
+    }
 
     // Reset cached data and structure
     cachedApiData = null;
@@ -277,8 +311,26 @@ if (boothSelect) {
     });
 }
 
+// Handle browser back/forward navigation
+window.addEventListener('popstate', () => {
+    const booth = getBoothFromUrl();
+    const port = BOOTH_PORTS[booth];
+    if (boothSelect) {
+        boothSelect.value = port;
+    }
+    handleBoothChange(port, false);
+});
+
 // Initialize on page load
 console.log('Hyundai Quality Control Dashboard Initialized');
+
+// Set initial booth from URL
+const initialBooth = getBoothFromUrl();
+currentPort = BOOTH_PORTS[initialBooth];
+if (boothSelect) {
+    boothSelect.value = currentPort;
+}
+console.log(`Starting with Booth ${initialBooth} (port ${currentPort})`);
 
 // Load live videos on initialization
 loadLiveVideos();
