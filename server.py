@@ -6,8 +6,8 @@ PORT = 8000
 
 class SPAHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        # Serve index.html for /dashboard/* routes
-        if self.path.startswith('/dashboard/'):
+        # Only redirect /dashboard/* routes (not static files)
+        if self.path.startswith('/dashboard/') and '.' not in self.path.split('/')[-1]:
             self.path = '/index.html'
         return super().do_GET()
 
