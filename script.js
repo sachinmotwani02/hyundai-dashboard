@@ -37,6 +37,10 @@ function getLiveVideoUrl() {
     return `http://localhost:${currentPort}/live`;
 }
 
+function getVinUrl() {
+    return `http://localhost:${currentPort}/car_vin`;
+}
+
 // Convert snake_case or space-separated to Title Case
 function toTitleCase(str) {
     return str
@@ -51,6 +55,7 @@ let currentStructure = null;
 // DOM Elements
 const checkboxes = document.querySelectorAll('.checkbox');
 const videosContainer = document.querySelector('.videos-container');
+const vinDisplay = document.getElementById('vin-display');
 let totalCheckboxes = checkboxes.length;
 let isLiveVideoLoaded = false;
 
@@ -230,6 +235,34 @@ async function fetchStatus() {
     }
 }
 
+// Fetch and display VIN
+async function fetchVin() {
+    try {
+        const response = await fetch(getVinUrl());
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const vin = await response.text();
+        updateVinDisplay(vin.trim());
+    } catch (error) {
+        console.error('Error fetching VIN:', error);
+        updateVinDisplay('');
+    }
+}
+
+// Update VIN display element
+function updateVinDisplay(vin) {
+    if (!vinDisplay) return;
+
+    if (vin && vin.length > 0) {
+        vinDisplay.innerHTML = `<span class="vin-label">VIN:</span><span class="vin-value">${vin}</span>`;
+        vinDisplay.classList.add('visible');
+    } else {
+        vinDisplay.innerHTML = '';
+        vinDisplay.classList.remove('visible');
+    }
+}
+
 // Update checkboxes based on API data
 function updateCheckboxes() {
     try {
@@ -327,6 +360,7 @@ function handleBoothChange(port, updateUrl = true) {
     // Reload everything for the new booth
     loadLiveVideos();
     fetchStatus();
+    fetchVin();
 }
 
 // Initialize booth selector
@@ -364,3 +398,7 @@ loadLiveVideos();
 // Start polling for status from API
 fetchStatus();
 setInterval(fetchStatus, POLL_INTERVAL);
+
+// Fetch VIN on initialization and poll for updates
+fetchVin();
+setInterval(fetchVin, POLL_INTERVAL);

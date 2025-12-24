@@ -115,6 +115,45 @@ body {
     height: 34px;
 }
 
+/* VIN Display */
+.vin-display {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    font-size: 13px;
+    font-weight: 600;
+    color: #2c3e50;
+    letter-spacing: 0.05em;
+}
+
+.vin-display.visible {
+    display: flex;
+}
+
+.vin-display .vin-label {
+    color: #64748b;
+    font-weight: 500;
+}
+
+.vin-display .vin-value {
+    color: #1e40af;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
 /* Booth Selector */
 .booth-selector {
     position: absolute;
