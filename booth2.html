@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyundai Quality Control Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header with Logos -->
+        <header class="dashboard-header">
+            <div class="logo-container">
+                <img src="Hyundai.png" alt="Hyundai Logo" class="logo hyundai-logo">
+            </div>
+            <div class="logo-container">
+                <img src="DefectScanner.png" alt="Defect Scanner Logo" class="logo defect-logo">
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <!-- Left Column: Front & Left Side -->
+            <div class="left-column">
+                <!-- Front View Card -->
+                <div class="inspection-card">
+                    <div class="card-header">
+                        <h2 class="card-title">FRONT</h2>
+                    </div>
+                    <div class="car-svg-container">
+                        <img src="FrontView.svg" alt="Front View" class="car-svg">
+                    </div>
+                    <!-- Checklist loaded from API -->
+                </div>
+
+                <!-- Left Side View Card -->
+                <div class="inspection-card">
+                    <div class="card-header">
+                        <h2 class="card-title">LEFT SIDE</h2>
+                    </div>
+                    <div class="car-svg-container">
+                        <img src="SideView.svg" alt="Left Side" class="car-svg">
+                    </div>
+                    <!-- Checklist loaded from API -->
+                </div>
+            </div>
+
+            <!-- Center: Video Grid -->
+            <div class="videos-container">
+                <!-- Videos loaded from API -->
+            </div>
+
+            <!-- Right Column: Right Side & Rear -->
+            <div class="right-column">
+                <!-- Right Side View Card -->
+                <div class="inspection-card">
+                    <div class="card-header">
+                        <h2 class="card-title">RIGHT SIDE</h2>
+                    </div>
+                    <div class="car-svg-container">
+                        <img src="SideView.svg" alt="Right Side" class="car-svg car-svg-flip">
+                    </div>
+                    <!-- Checklist loaded from API -->
+                </div>
+
+                <!-- Rear View Card -->
+                <div class="inspection-card">
+                    <div class="card-header">
+                        <h2 class="card-title">REAR</h2>
+                    </div>
+                    <div class="car-svg-container">
+                        <img src="BackView.svg" alt="Rear View" class="car-svg">
+                    </div>
+                    <!-- Checklist loaded from API -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

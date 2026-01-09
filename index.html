@@ -18,9 +18,6 @@
             </div>
         </header>
 
-        <!-- VIN Display -->
-        <div class="vin-display" id="vin-display"></div>
-
         <!-- Booth Selector -->
         <div class="booth-selector">
             <label for="booth-select">Booth:</label>
@@ -32,12 +29,12 @@
         </div>
 
         <div class="main-layout">
-            <!-- Left Column: Front & Left Side -->
+            <!-- Left Column: Front Lamps & Left Parts -->
             <div class="left-column">
-                <!-- Front View Card -->
-                <div class="inspection-card">
+                <!-- Front View Lamps Card -->
+                <div class="inspection-card lamp-card" id="front-lamps-card">
                     <div class="card-header">
-                        <h2 class="card-title">FRONT</h2>
+                        <h2 class="card-title">FRONT LAMPS</h2>
                     </div>
                     <div class="car-svg-container">
                         <img src="FrontView.svg" alt="Front View" class="car-svg">
@@ -45,10 +42,15 @@
                     <!-- Checklist loaded from API -->
                 </div>
 
-                <!-- Left Side View Card -->
-                <div class="inspection-card">
+                <!-- Left Side Parts Card -->
+                <div class="inspection-card parts-card" id="left-parts-card">
                     <div class="card-header">
-                        <h2 class="card-title">LEFT SIDE</h2>
+                        <h2 class="card-title">
+                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>
+                            </svg>
+                            PARTS LEFT
+                        </h2>
                     </div>
                     <div class="car-svg-container">
                         <img src="SideView.svg" alt="Left Side" class="car-svg">
@@ -62,26 +64,31 @@
                 <!-- Videos loaded from API -->
             </div>
 
-            <!-- Right Column: Right Side & Rear -->
+            <!-- Right Column: Rear Lamps & Right Parts -->
             <div class="right-column">
-                <!-- Right Side View Card -->
-                <div class="inspection-card">
+                <!-- Rear View Lamps Card -->
+                <div class="inspection-card lamp-card" id="rear-lamps-card">
                     <div class="card-header">
-                        <h2 class="card-title">RIGHT SIDE</h2>
+                        <h2 class="card-title">REAR LAMPS</h2>
                     </div>
                     <div class="car-svg-container">
-                        <img src="SideView.svg" alt="Right Side" class="car-svg car-svg-flip">
+                        <img src="BackView.svg" alt="Rear View" class="car-svg">
                     </div>
                     <!-- Checklist loaded from API -->
                 </div>
 
-                <!-- Rear View Card -->
-                <div class="inspection-card">
+                <!-- Right Side Parts Card -->
+                <div class="inspection-card parts-card" id="right-parts-card">
                     <div class="card-header">
-                        <h2 class="card-title">REAR</h2>
+                        <h2 class="card-title">
+                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>
+                            </svg>
+                            PARTS RIGHT
+                        </h2>
                     </div>
                     <div class="car-svg-container">
-                        <img src="BackView.svg" alt="Rear View" class="car-svg">
+                        <img src="SideView.svg" alt="Right Side" class="car-svg car-svg-flip">
                     </div>
                     <!-- Checklist loaded from API -->
                 </div>

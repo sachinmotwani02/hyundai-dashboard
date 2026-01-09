@@ -29,17 +29,20 @@ function updateUrlWithBooth(booth) {
 }
 
 // Dynamic URL getters
+function getBaseHost() {
+    return window.location.hostname;
+}
+
 function getStatusUrl() {
-    return `http://localhost:${currentPort}/light_status`;
+    return `http://${getBaseHost()}:${currentPort}/light_status`;
+    // return `http://192.168.1.245:5000/light_status`;
 }
 
 function getLiveVideoUrl() {
-    return `http://localhost:${currentPort}/live`;
+    return `http://${getBaseHost()}:${currentPort}/live`;
+    // return `http://192.168.1.245:5000/live`;
 }
 
-function getVinUrl() {
-    return `http://localhost:${currentPort}/car_vin`;
-}
 
 // Convert snake_case or space-separated to Title Case
 function toTitleCase(str) {
@@ -55,7 +58,6 @@ let currentStructure = null;
 // DOM Elements
 const checkboxes = document.querySelectorAll('.checkbox');
 const videosContainer = document.querySelector('.videos-container');
-const vinDisplay = document.getElementById('vin-display');
 let totalCheckboxes = checkboxes.length;
 let isLiveVideoLoaded = false;
 
@@ -64,6 +66,16 @@ function updateCompletedCount() {
     const checkedCount = document.querySelectorAll('.checkbox:checked').length;
     console.log(`Checked: ${checkedCount}/${totalCheckboxes}`);
 }
+
+// Parts state mapping
+// 0 = grey (not eligible for current car)
+// 1 = blue (present in current car)
+// 2 = yellow (required but not present)
+const PARTS_STATES = {
+    0: 'not-eligible',  // grey
+    1: 'present',       // blue
+    2: 'required'       // yellow
+};
 
 // Dynamically create checkboxes from API data
 function createChecklistColumn(container, sectionName, sectionData, type) {
@@ -74,8 +86,16 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
         return;
     }
 
-    // Convert to array and sort: unchecked (0) first, checked (1) last
-    const items = Object.entries(sectionData).sort((a, b) => a[1] - b[1]);
+    // Convert to array and sort by state for parts (required first, then present, then not-eligible)
+    // For lamps: unchecked (0) first, checked (1) last
+    const items = Object.entries(sectionData).sort((a, b) => {
+        if (type === 'parts') {
+            // Sort order: 2 (required/yellow) first, then 1 (present/blue), then 0 (not-eligible/grey)
+            const order = { 2: 0, 1: 1, 0: 2 };
+            return (order[a[1]] ?? 3) - (order[b[1]] ?? 3);
+        }
+        return a[1] - b[1];
+    });
 
     if (items.length === 0) {
         container.innerHTML = '<div class="no-items">No items</div>';
@@ -87,130 +107,101 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     items.forEach(([key, value]) => {
         const checkboxId = `${type}-${sectionName}-${key.replace(/\s+/g, '-')}`;
         const label = toTitleCase(key);
-        const isChecked = value === 1;
 
-        const itemHTML = `
-            <div class="checklist-item">
-                <input type="checkbox" id="${checkboxId}" class="checkbox" ${isChecked ? 'checked' : ''}>
-                <label for="${checkboxId}">${label}</label>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', itemHTML);
+        if (type === 'parts') {
+            // Parts have 3 states: grey (0), blue (1), yellow (2)
+            const stateClass = PARTS_STATES[value] || 'not-eligible';
+            const itemHTML = `
+                <div class="checklist-item parts-state-${stateClass}" data-state="${value}">
+                    <span class="parts-indicator"></span>
+                    <label>${label}</label>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+        } else {
+            // Lamps use checkbox (checked/unchecked)
+            const isChecked = value === 1;
+            const itemHTML = `
+                <div class="checklist-item">
+                    <input type="checkbox" id="${checkboxId}" class="checkbox" ${isChecked ? 'checked' : ''}>
+                    <label for="${checkboxId}">${label}</label>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', itemHTML);
+        }
     });
 }
 
-// Map API response to UI sections
+// Map API response to UI sections (new layout: lamps top, parts bottom)
 function mapApiDataToSections(apiData) {
-    // Extract lamps data (front and rear only have lamps in the API)
-    const lampsData = {
-        front: apiData.front || null,
-        left_side: null, // No lamps for left side in the API
-        right_side: null, // No lamps for right side in the API
-        rear: apiData.rear || null
-    };
+    // Front lamps only (top left card)
+    const frontLamps = apiData.front || null;
 
-    // Extract parts data
-    const partsData = {
-        front: apiData.front_parts || null,
-        left_side: apiData.left_side_parts || null,
-        right_side: apiData.right_side_parts || null,
-        rear: apiData.rear_parts || null
-    };
+    // Rear lamps only (top right card)
+    const rearLamps = apiData.rear || null;
 
-    return { lampsData, partsData };
+    // Left side parts
+    const leftParts = apiData.left_side_parts || null;
+
+    // Right side parts
+    const rightParts = apiData.right_side_parts || null;
+
+    return { frontLamps, rearLamps, leftParts, rightParts };
 }
 
-function createCheckboxesFromData(lampsData, partsData) {
-    const sections = {
-        front: {
-            card: document.querySelector('.left-column .inspection-card:nth-child(1)'),
-            partsContainer: null,
-            lightsContainer: null
+function createCheckboxesFromData(frontLamps, rearLamps, leftParts, rightParts) {
+    // New layout: 4 cards with specific content
+    const cards = {
+        frontLamps: {
+            card: document.getElementById('front-lamps-card'),
+            data: frontLamps,
+            type: 'lamps',
+            name: 'front'
         },
-        left_side: {
-            card: document.querySelector('.left-column .inspection-card:nth-child(2)'),
-            partsContainer: null,
-            lightsContainer: null
+        rearLamps: {
+            card: document.getElementById('rear-lamps-card'),
+            data: rearLamps,
+            type: 'lamps',
+            name: 'rear'
         },
-        right_side: {
-            card: document.querySelector('.right-column .inspection-card:nth-child(1)'),
-            partsContainer: null,
-            lightsContainer: null
+        leftParts: {
+            card: document.getElementById('left-parts-card'),
+            data: leftParts,
+            type: 'parts',
+            name: 'left'
         },
-        rear: {
-            card: document.querySelector('.right-column .inspection-card:nth-child(2)'),
-            partsContainer: null,
-            lightsContainer: null
+        rightParts: {
+            card: document.getElementById('right-parts-card'),
+            data: rightParts,
+            type: 'parts',
+            name: 'right'
         }
     };
 
-    for (const sectionName in sections) {
-        const section = sections[sectionName];
-        if (!section.card) continue;
+    for (const cardKey in cards) {
+        const { card, data, type, name } = cards[cardKey];
+        if (!card) continue;
 
-        // Check if we have data for this section
-        const hasParts = partsData && partsData[sectionName] && Object.keys(partsData[sectionName]).length > 0;
-        const hasLamps = lampsData && lampsData[sectionName] && Object.keys(lampsData[sectionName]).length > 0;
+        const hasData = data && Object.keys(data).length > 0;
 
-        // Find or create the dual checklist container
-        let dualContainer = section.card.querySelector('.dual-checklist-container');
-        if (!dualContainer) {
-            // Remove old single container if exists
-            const oldContainer = section.card.querySelector('.checklist-container');
+        // Find or create the checklist container
+        let checklistContainer = card.querySelector('.checklist-container');
+        if (!checklistContainer) {
+            // Remove old dual container if exists
+            const oldContainer = card.querySelector('.dual-checklist-container');
             if (oldContainer) oldContainer.remove();
 
-            // Create new dual container structure
-            dualContainer = document.createElement('div');
-            dualContainer.className = 'dual-checklist-container';
-
-            // Only show columns that have data
-            if (hasParts && hasLamps) {
-                dualContainer.innerHTML = `
-                    <div class="checklist-column">
-                        <h3 class="checklist-heading">Parts Check</h3>
-                        <div class="checklist-container parts-checklist"></div>
-                    </div>
-                    <div class="checklist-column">
-                        <h3 class="checklist-heading">Lamp Check</h3>
-                        <div class="checklist-container lights-checklist"></div>
-                    </div>
-                `;
-            } else if (hasParts) {
-                dualContainer.innerHTML = `
-                    <div class="checklist-column single-column">
-                        <h3 class="checklist-heading">Parts Check</h3>
-                        <div class="checklist-container parts-checklist"></div>
-                    </div>
-                `;
-            } else if (hasLamps) {
-                dualContainer.innerHTML = `
-                    <div class="checklist-column single-column">
-                        <h3 class="checklist-heading">Lamp Check</h3>
-                        <div class="checklist-container lights-checklist"></div>
-                    </div>
-                `;
-            } else {
-                dualContainer.innerHTML = `
-                    <div class="checklist-column single-column">
-                        <div class="no-items">No inspection items</div>
-                    </div>
-                `;
-            }
-
-            section.card.appendChild(dualContainer);
+            // Create new single checklist container
+            checklistContainer = document.createElement('div');
+            checklistContainer.className = `checklist-container ${type}-checklist`;
+            card.appendChild(checklistContainer);
         }
 
-        section.partsContainer = section.card.querySelector('.parts-checklist');
-        section.lightsContainer = section.card.querySelector('.lights-checklist');
-
-        // Populate parts checklist
-        if (section.partsContainer && partsData && partsData[sectionName]) {
-            createChecklistColumn(section.partsContainer, sectionName, partsData[sectionName], 'parts');
-        }
-
-        // Populate lights checklist
-        if (section.lightsContainer && lampsData && lampsData[sectionName]) {
-            createChecklistColumn(section.lightsContainer, sectionName, lampsData[sectionName], 'lamps');
+        // Populate checklist
+        if (hasData) {
+            createChecklistColumn(checklistContainer, name, data, type);
+        } else {
+            checklistContainer.innerHTML = '<div class="no-items">No inspection items</div>';
         }
     }
 
@@ -235,44 +226,16 @@ async function fetchStatus() {
     }
 }
 
-// Fetch and display VIN
-async function fetchVin() {
-    try {
-        const response = await fetch(getVinUrl());
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const vin = await response.text();
-        updateVinDisplay(vin.trim());
-    } catch (error) {
-        console.error('Error fetching VIN:', error);
-        updateVinDisplay('');
-    }
-}
-
-// Update VIN display element
-function updateVinDisplay(vin) {
-    if (!vinDisplay) return;
-
-    if (vin && vin.length > 0) {
-        vinDisplay.innerHTML = `<span class="vin-label">VIN:</span><span class="vin-value">${vin}</span>`;
-        vinDisplay.classList.add('visible');
-    } else {
-        vinDisplay.innerHTML = '';
-        vinDisplay.classList.remove('visible');
-    }
-}
-
 // Update checkboxes based on API data
 function updateCheckboxes() {
     try {
         if (!cachedApiData) return;
 
-        // Map API data to sections
-        const { lampsData, partsData } = mapApiDataToSections(cachedApiData);
+        // Map API data to new sections (lamps top, parts bottom)
+        const { frontLamps, rearLamps, leftParts, rightParts } = mapApiDataToSections(cachedApiData);
 
         // Always recreate to ensure proper sorting based on current state
-        createCheckboxesFromData(lampsData, partsData);
+        createCheckboxesFromData(frontLamps, rearLamps, leftParts, rightParts);
 
         // Update the structure tracking
         const newStructure = JSON.stringify(cachedApiData);
@@ -360,7 +323,6 @@ function handleBoothChange(port, updateUrl = true) {
     // Reload everything for the new booth
     loadLiveVideos();
     fetchStatus();
-    fetchVin();
 }
 
 // Initialize booth selector
@@ -398,7 +360,3 @@ loadLiveVideos();
 // Start polling for status from API
 fetchStatus();
 setInterval(fetchStatus, POLL_INTERVAL);
-
-// Fetch VIN on initialization and poll for updates
-fetchVin();
-setInterval(fetchVin, POLL_INTERVAL);
