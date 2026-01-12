@@ -18,6 +18,12 @@
             </div>
         </header>
 
+        <!-- VIN Display -->
+        <div class="vin-display" id="vin-display">
+            <span class="vin-label">VIN:</span>
+            <span class="vin-code" id="vin-code">--</span>
+        </div>
+
         <!-- Booth Selector -->
         <div class="booth-selector">
             <label for="booth-select">Booth:</label>
@@ -93,6 +99,14 @@
                     <!-- Checklist loaded from API -->
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Status Popover (Full Screen) -->
+    <div class="status-popover" id="status-popover">
+        <div class="popover-content">
+            <div class="popover-icon" id="popover-icon"></div>
+            <div class="popover-text" id="popover-text"></div>
         </div>
     </div>
 

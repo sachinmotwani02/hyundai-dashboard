@@ -55,6 +55,12 @@ function toTitleCase(str) {
 // Store current checkboxes structure
 let currentStructure = null;
 
+// VIN and status tracking
+let currentVin = null;
+let lastOverallStatus = null;
+let statusPopoverTimeout = null;
+
+
 // DOM Elements
 const checkboxes = document.querySelectorAll('.checkbox');
 const videosContainer = document.querySelector('.videos-container');
@@ -212,6 +218,61 @@ function createCheckboxesFromData(frontLamps, rearLamps, leftParts, rightParts) 
 // Cached API data
 let cachedApiData = null;
 
+// Update VIN display
+function updateVinDisplay(vin) {
+    const vinCodeElement = document.getElementById('vin-code');
+    if (vinCodeElement && vin) {
+        vinCodeElement.textContent = vin;
+        currentVin = vin;
+    }
+}
+
+// Show status popover
+function showStatusPopover(status) {
+    const popover = document.getElementById('status-popover');
+    const popoverIcon = document.getElementById('popover-icon');
+    const popoverText = document.getElementById('popover-text');
+
+    if (!popover || !popoverIcon || !popoverText) return;
+
+    // Clear any existing timeout
+    if (statusPopoverTimeout) {
+        clearTimeout(statusPopoverTimeout);
+    }
+
+    // Set icon and text based on status
+    // 0 = OK (passed), 1 = NG (failed)
+    const isSuccess = status === 0;
+
+    popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
+    popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
+    popoverText.textContent = isSuccess ? 'Test Passed' : 'Test Failed';
+
+    // Show popover
+    popover.classList.add('show');
+
+    // Hide after 8 seconds
+    statusPopoverTimeout = setTimeout(() => {
+        popover.classList.remove('show');
+    }, 8000);
+}
+
+// Check if status changed and show popover
+// Status: 0 = OK (passed), 1 = NG (failed), 2 = Wait (no popover)
+function handleStatusChange(newStatus) {
+    // Status 2 means waiting - don't show popover
+    if (newStatus === 2) {
+        lastOverallStatus = newStatus;
+        return;
+    }
+
+    // Only show popover if status changed to 0 or 1
+    if (lastOverallStatus !== newStatus && (newStatus === 0 || newStatus === 1)) {
+        showStatusPopover(newStatus);
+    }
+    lastOverallStatus = newStatus;
+}
+
 // Fetch status from unified endpoint
 async function fetchStatus() {
     try {
@@ -219,7 +280,20 @@ async function fetchStatus() {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        cachedApiData = await response.json();
+        const data = await response.json();
+
+        cachedApiData = data;
+
+        // Update VIN display
+        if (data.vin) {
+            updateVinDisplay(data.vin);
+        }
+
+        // Handle status change (0 = OK, 1 = NG, 2 = Wait)
+        if (data.overall_status !== undefined) {
+            handleStatusChange(data.overall_status);
+        }
+
         updateCheckboxes();
     } catch (error) {
         console.error('Error fetching status:', error);
@@ -250,6 +324,17 @@ function updateCheckboxes() {
     }
 }
 
+// Get or create video content wrapper (preserves VIN display and popover)
+function getVideoContentWrapper() {
+    let wrapper = videosContainer.querySelector('.video-content-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-content-wrapper';
+        videosContainer.appendChild(wrapper);
+    }
+    return wrapper;
+}
+
 // Fetch and load live video feed
 async function loadLiveVideos() {
     try {
@@ -268,8 +353,9 @@ async function loadLiveVideos() {
         const doc = parser.parseFromString(html, 'text/html');
         const bodyContent = doc.body ? doc.body.innerHTML : html;
 
-        // Insert the extracted body content
-        videosContainer.innerHTML = bodyContent;
+        // Insert the extracted body content into wrapper (preserves VIN and popover)
+        const wrapper = getVideoContentWrapper();
+        wrapper.innerHTML = bodyContent;
         isLiveVideoLoaded = true;
 
         console.log('Live video feed loaded successfully');
@@ -281,9 +367,10 @@ async function loadLiveVideos() {
         console.log('Falling back to static images');
 
         // Fallback to static images
-        if (isLiveVideoLoaded) {
-            // If it was previously loaded but now failed, revert to static images
-            videosContainer.innerHTML = `
+        const wrapper = getVideoContentWrapper();
+        if (isLiveVideoLoaded || !wrapper.innerHTML) {
+            // If it was previously loaded but now failed, or no content, show static images
+            wrapper.innerHTML = `
                 <div class="video-wrapper">
                     <img src="scene-1.png" alt="Front View" class="vehicle-image">
                 </div>
@@ -319,6 +406,14 @@ function handleBoothChange(port, updateUrl = true) {
     cachedApiData = null;
     currentStructure = null;
     isLiveVideoLoaded = false;
+    currentVin = null;
+    lastOverallStatus = null;
+
+    // Reset VIN display
+    const vinCodeElement = document.getElementById('vin-code');
+    if (vinCodeElement) {
+        vinCodeElement.textContent = '--';
+    }
 
     // Reload everything for the new booth
     loadLiveVideos();
