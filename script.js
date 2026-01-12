@@ -43,6 +43,10 @@ function getLiveVideoUrl() {
     // return `http://192.168.1.245:5000/live`;
 }
 
+function getOverallStatusUrl() {
+    return `http://${getBaseHost()}:${currentPort}/overall-status`;
+}
+
 
 // Convert snake_case or space-separated to Title Case
 function toTitleCase(str) {
@@ -287,10 +291,45 @@ function handleStatusChange(newStatus) {
     lastOverallStatus = newStatus;
 }
 
+// Fetch overall_status from separate endpoint via POST
+async function fetchOverallStatus() {
+    const url = getOverallStatusUrl();
+    const payload = { value: lastOverallStatus ?? 2 };
+
+    console.log('[API] POST overall-status:', url, payload);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[API] overall-status response:', data);
+
+        // Handle status change (0 = OK, 1 = NG, 2 = Wait)
+        if (data.overall_status !== undefined) {
+            handleStatusChange(data.overall_status);
+        }
+    } catch (error) {
+        console.error('[API] Error fetching overall-status:', error);
+    }
+}
+
 // Fetch status from unified endpoint
 async function fetchStatus() {
+    const url = getStatusUrl();
+    console.log('[API] Fetching:', url);
+
     try {
-        const response = await fetch(getStatusUrl());
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -298,9 +337,7 @@ async function fetchStatus() {
 
         // Log API response for VIN and status
         console.log('[API] Response:', {
-            vin: data.vin,
-            overall_status: data.overall_status,
-            url: getStatusUrl()
+            vin: data.vin
         });
 
         cachedApiData = data;
@@ -310,15 +347,13 @@ async function fetchStatus() {
             updateVinDisplay(data.vin);
         }
 
-        // Handle status change (0 = OK, 1 = NG, 2 = Wait)
-        if (data.overall_status !== undefined) {
-            handleStatusChange(data.overall_status);
-        }
-
         updateCheckboxes();
     } catch (error) {
         console.error('[API] Error fetching status:', error);
     }
+
+    // Fetch overall_status from separate endpoint
+    await fetchOverallStatus();
 }
 
 // Update checkboxes based on API data
