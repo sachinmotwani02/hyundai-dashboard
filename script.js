@@ -222,6 +222,9 @@ let cachedApiData = null;
 function updateVinDisplay(vin) {
     const vinCodeElement = document.getElementById('vin-code');
     if (vinCodeElement && vin) {
+        if (currentVin !== vin) {
+            console.log('[VIN] Updated:', vin);
+        }
         vinCodeElement.textContent = vin;
         currentVin = vin;
     }
@@ -244,6 +247,8 @@ function showStatusPopover(status) {
     // 0 = OK (passed), 1 = NG (failed)
     const isSuccess = status === 0;
 
+    console.log('[STATUS] Showing popover:', isSuccess ? 'PASSED (0)' : 'FAILED (1)');
+
     popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
     popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
     popoverText.textContent = isSuccess ? 'Test Passed' : 'Test Failed';
@@ -253,6 +258,7 @@ function showStatusPopover(status) {
 
     // Hide after 8 seconds
     statusPopoverTimeout = setTimeout(() => {
+        console.log('[STATUS] Hiding popover');
         popover.classList.remove('show');
     }, 8000);
 }
@@ -260,8 +266,16 @@ function showStatusPopover(status) {
 // Check if status changed and show popover
 // Status: 0 = OK (passed), 1 = NG (failed), 2 = Wait (no popover)
 function handleStatusChange(newStatus) {
+    const statusNames = { 0: 'OK', 1: 'NG', 2: 'WAIT' };
+
+    // Log status change
+    if (lastOverallStatus !== newStatus) {
+        console.log(`[STATUS] Changed: ${statusNames[lastOverallStatus] ?? 'null'} → ${statusNames[newStatus] ?? newStatus}`);
+    }
+
     // Status 2 means waiting - don't show popover
     if (newStatus === 2) {
+        console.log('[STATUS] Wait state - no popover');
         lastOverallStatus = newStatus;
         return;
     }
@@ -282,6 +296,13 @@ async function fetchStatus() {
         }
         const data = await response.json();
 
+        // Log API response for VIN and status
+        console.log('[API] Response:', {
+            vin: data.vin,
+            overall_status: data.overall_status,
+            url: getStatusUrl()
+        });
+
         cachedApiData = data;
 
         // Update VIN display
@@ -296,7 +317,7 @@ async function fetchStatus() {
 
         updateCheckboxes();
     } catch (error) {
-        console.error('Error fetching status:', error);
+        console.error('[API] Error fetching status:', error);
     }
 }
 
