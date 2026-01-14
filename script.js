@@ -203,9 +203,11 @@ function createCheckboxesFromData(frontLamps, rearLamps, leftParts, rightParts) 
 
             // Create new single checklist container
             checklistContainer = document.createElement('div');
-            checklistContainer.className = `checklist-container ${type}-checklist`;
             card.appendChild(checklistContainer);
         }
+
+        // Always ensure correct class is applied (including type-specific class)
+        checklistContainer.className = `checklist-container ${type}-checklist`;
 
         // Populate checklist
         if (hasData) {
