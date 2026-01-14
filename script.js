@@ -44,7 +44,7 @@ function getLiveVideoUrl() {
 }
 
 function getOverallStatusUrl() {
-    return `http://${getBaseHost()}:${currentPort}/overall-status`;
+    return `http://${getBaseHost()}:${currentPort}/overall_status`;
 }
 
 
@@ -296,7 +296,7 @@ async function fetchOverallStatus() {
     const url = getOverallStatusUrl();
     const payload = { value: lastOverallStatus ?? 2 };
 
-    console.log('[API] POST overall-status:', url, payload);
+    console.log('[API] POST overall_status:', url, payload);
 
     try {
         const response = await fetch(url, {
@@ -312,14 +312,14 @@ async function fetchOverallStatus() {
         }
 
         const data = await response.json();
-        console.log('[API] overall-status response:', data);
+        console.log('[API] overall_status response:', data);
 
         // Handle status change (0 = OK, 1 = NG, 2 = Wait)
         if (data.overall_status !== undefined) {
             handleStatusChange(data.overall_status);
         }
     } catch (error) {
-        console.error('[API] Error fetching overall-status:', error);
+        console.error('[API] Error fetching overall_status:', error);
     }
 }
 
