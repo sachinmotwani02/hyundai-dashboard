@@ -308,10 +308,17 @@ body {
 /* Parts Cards - Subtle grey accent */
 .parts-card .card-header {
     background: linear-gradient(135deg, rgba(107, 114, 128, 0.08) 0%, rgba(156, 163, 175, 0.04) 100%);
+    padding: 8px 12px;
+}
+
+.parts-card .card-title {
+    font-size: 14px;
 }
 
 .parts-card .title-icon {
     color: #6b7280;
+    width: 16px;
+    height: 16px;
 }
 
 /* Card Header */
@@ -356,6 +363,17 @@ body {
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     min-height: 90px;
     flex-shrink: 0;
+}
+
+/* Compact car SVG for parts cards to maximize parts list space */
+.parts-card .car-svg-container {
+    padding: 6px 12px;
+    min-height: 60px;
+    gap: 4px;
+}
+
+.parts-card .car-svg {
+    height: 45px;
 }
 
 .car-svg {
@@ -559,16 +577,44 @@ body {
     color: #059669;
 }
 
+/* Parts Checklist - Two Column Layout for TV Display */
+.parts-checklist {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 6px !important;
+    padding: 6px !important;
+    overflow: hidden !important;
+}
+
+.parts-checklist .checklist-item {
+    padding: 4px 6px !important;
+    min-height: 24px !important;
+    gap: 5px !important;
+    border-radius: 4px !important;
+}
+
+.parts-checklist .checklist-item label {
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+}
+
 /* Parts Indicator (replaces checkbox for parts) */
 .parts-indicator {
-    width: 22px;
-    height: 22px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.25s ease;
+}
+
+/* Smaller indicator icons for parts */
+.parts-checklist .parts-indicator {
+    width: 14px !important;
+    height: 14px !important;
 }
 
 /* Parts State: Grey - Not eligible for current car */
@@ -597,12 +643,12 @@ body {
 
 .parts-state-present .parts-indicator::after {
     content: '';
-    width: 6px;
-    height: 10px;
+    width: 4px;
+    height: 7px;
     border: solid white;
-    border-width: 0 2.5px 2.5px 0;
+    border-width: 0 2px 2px 0;
     transform: rotate(45deg);
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .parts-state-present label {
@@ -623,7 +669,7 @@ body {
     content: '!';
     color: white;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 10px;
     line-height: 1;
 }
 
