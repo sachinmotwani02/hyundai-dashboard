@@ -47,6 +47,10 @@ function getOverallStatusUrl() {
     return `http://${getBaseHost()}:${currentPort}/overall_status`;
 }
 
+function getVinNumberUrl() {
+    return `http://${getBaseHost()}:${currentPort}/vin_number`;
+}
+
 
 // Convert snake_case or space-separated to Title Case
 function toTitleCase(str) {
@@ -291,6 +295,28 @@ function handleStatusChange(newStatus) {
     lastOverallStatus = newStatus;
 }
 
+// Fetch VIN from separate endpoint
+async function fetchVinNumber() {
+    const url = getVinNumberUrl();
+    console.log('[API] Fetching VIN:', url);
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('[API] VIN response:', data);
+
+        // Update VIN display - response format: { "vin": "..." }
+        if (data.vin) {
+            updateVinDisplay(data.vin);
+        }
+    } catch (error) {
+        console.error('[API] Error fetching VIN:', error);
+    }
+}
+
 // Fetch overall_status from separate endpoint via POST
 async function fetchOverallStatus() {
     const url = getOverallStatusUrl();
@@ -335,22 +361,18 @@ async function fetchStatus() {
         }
         const data = await response.json();
 
-        // Log API response for VIN and status
-        console.log('[API] Response:', {
-            vin: data.vin
-        });
+        // Log API response
+        console.log('[API] Response received');
 
         cachedApiData = data;
-
-        // Update VIN display
-        if (data.vin) {
-            updateVinDisplay(data.vin);
-        }
 
         updateCheckboxes();
     } catch (error) {
         console.error('[API] Error fetching status:', error);
     }
+
+    // Fetch VIN from separate endpoint
+    await fetchVinNumber();
 
     // Fetch overall_status from separate endpoint
     await fetchOverallStatus();
