@@ -240,14 +240,26 @@ function updateVinDisplay(vin) {
 
 // Show status popover
 function showStatusPopover(status) {
+    console.log('[POPOVER] showStatusPopover called with status:', status);
+
     const popover = document.getElementById('status-popover');
     const popoverIcon = document.getElementById('popover-icon');
     const popoverText = document.getElementById('popover-text');
 
-    if (!popover || !popoverIcon || !popoverText) return;
+    console.log('[POPOVER] DOM elements found:', {
+        popover: !!popover,
+        popoverIcon: !!popoverIcon,
+        popoverText: !!popoverText
+    });
+
+    if (!popover || !popoverIcon || !popoverText) {
+        console.error('[POPOVER] ERROR: Missing DOM elements! Cannot show popover.');
+        return;
+    }
 
     // Clear any existing timeout
     if (statusPopoverTimeout) {
+        console.log('[POPOVER] Clearing existing timeout');
         clearTimeout(statusPopoverTimeout);
     }
 
@@ -255,18 +267,22 @@ function showStatusPopover(status) {
     // 0 = OK (passed), 1 = NG (failed)
     const isSuccess = status === 0;
 
-    console.log('[STATUS] Showing popover:', isSuccess ? 'PASSED (0)' : 'FAILED (1)');
+    console.log('[POPOVER] Setting up popover display:', isSuccess ? 'PASSED (0)' : 'FAILED (1)');
 
     popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
     popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
     popoverText.textContent = isSuccess ? 'Test Passed' : 'Test Failed';
 
     // Show popover
+    console.log('[POPOVER] Adding "show" class to popover');
     popover.classList.add('show');
+    console.log('[POPOVER] Popover classList after adding show:', popover.classList.toString());
+    console.log('[POPOVER] Popover computed visibility:', window.getComputedStyle(popover).visibility);
+    console.log('[POPOVER] Popover computed opacity:', window.getComputedStyle(popover).opacity);
 
     // Hide after 8 seconds
     statusPopoverTimeout = setTimeout(() => {
-        console.log('[STATUS] Hiding popover');
+        console.log('[POPOVER] Auto-hiding popover after 8 seconds');
         popover.classList.remove('show');
     }, 8000);
 }
@@ -276,21 +292,36 @@ function showStatusPopover(status) {
 function handleStatusChange(newStatus) {
     const statusNames = { 0: 'OK', 1: 'NG', 2: 'WAIT' };
 
-    // Log status change
-    if (lastOverallStatus !== newStatus) {
-        console.log(`[STATUS] Changed: ${statusNames[lastOverallStatus] ?? 'null'} → ${statusNames[newStatus] ?? newStatus}`);
-    }
+    console.log('[STATUS] handleStatusChange called:', {
+        newStatus: newStatus,
+        newStatusName: statusNames[newStatus] ?? 'UNKNOWN',
+        lastOverallStatus: lastOverallStatus,
+        lastStatusName: statusNames[lastOverallStatus] ?? 'null',
+        statusChanged: lastOverallStatus !== newStatus
+    });
 
     // Status 2 means waiting - don't show popover
     if (newStatus === 2) {
-        console.log('[STATUS] Wait state - no popover');
+        console.log('[STATUS] Wait state (2) received - no popover will be shown');
         lastOverallStatus = newStatus;
         return;
     }
 
     // Only show popover if status changed to 0 or 1
-    if (lastOverallStatus !== newStatus && (newStatus === 0 || newStatus === 1)) {
+    const shouldShowPopover = lastOverallStatus !== newStatus && (newStatus === 0 || newStatus === 1);
+    console.log('[STATUS] Should show popover?', shouldShowPopover, {
+        statusChanged: lastOverallStatus !== newStatus,
+        isValidStatus: newStatus === 0 || newStatus === 1
+    });
+
+    if (shouldShowPopover) {
+        console.log('[STATUS] >>> CALLING showStatusPopover with status:', newStatus);
         showStatusPopover(newStatus);
+    } else {
+        console.log('[STATUS] NOT showing popover. Reasons:', {
+            sameAsPrevious: lastOverallStatus === newStatus,
+            invalidStatus: newStatus !== 0 && newStatus !== 1
+        });
     }
     lastOverallStatus = newStatus;
 }
@@ -322,7 +353,7 @@ async function fetchOverallStatus() {
     const url = getOverallStatusUrl();
     const payload = { value: lastOverallStatus ?? 2 };
 
-    console.log('[API] POST overall_status:', url, payload);
+    console.log('[API] POST overall_status:', url, 'payload:', JSON.stringify(payload));
 
     try {
         const response = await fetch(url, {
@@ -333,19 +364,26 @@ async function fetchOverallStatus() {
             body: JSON.stringify(payload)
         });
 
+        console.log('[API] overall_status response status:', response.status, response.statusText);
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('[API] overall_status response:', data);
+        console.log('[API] overall_status response data:', JSON.stringify(data));
+        console.log('[API] overall_status value in response:', data.overall_status, '(type:', typeof data.overall_status + ')');
 
         // Handle status change (0 = OK, 1 = NG, 2 = Wait)
         if (data.overall_status !== undefined) {
+            console.log('[API] >>> Calling handleStatusChange with:', data.overall_status);
             handleStatusChange(data.overall_status);
+        } else {
+            console.warn('[API] WARNING: overall_status not found in response. Response keys:', Object.keys(data));
         }
     } catch (error) {
-        console.error('[API] Error fetching overall_status:', error);
+        console.error('[API] Error fetching overall_status:', error.message);
+        console.error('[API] Full error:', error);
     }
 }
 
@@ -518,6 +556,21 @@ window.addEventListener('popstate', () => {
 
 // Initialize on page load
 console.log('Hyundai Quality Control Dashboard Initialized');
+
+// Verify popover DOM elements exist at startup
+const popoverCheck = {
+    popover: document.getElementById('status-popover'),
+    icon: document.getElementById('popover-icon'),
+    text: document.getElementById('popover-text')
+};
+console.log('[INIT] Status popover DOM check:', {
+    popoverExists: !!popoverCheck.popover,
+    iconExists: !!popoverCheck.icon,
+    textExists: !!popoverCheck.text
+});
+if (!popoverCheck.popover || !popoverCheck.icon || !popoverCheck.text) {
+    console.error('[INIT] ERROR: Status popover elements missing from DOM!');
+}
 
 // Set initial booth from URL
 const initialBooth = getBoothFromUrl();
