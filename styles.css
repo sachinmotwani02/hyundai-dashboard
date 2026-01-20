@@ -313,17 +313,17 @@ body {
 
 .parts-card .card-header {
     background: linear-gradient(135deg, rgba(107, 114, 128, 0.08) 0%, rgba(156, 163, 175, 0.04) 100%);
-    padding: 8px 12px;
+    padding: 10px 12px;
 }
 
 .parts-card .card-title {
-    font-size: 14px;
+    font-size: 18px;
 }
 
 .parts-card .title-icon {
     color: #6b7280;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
 /* Card Header */
@@ -370,15 +370,9 @@ body {
     flex-shrink: 0;
 }
 
-/* Compact car SVG for parts cards to maximize parts list space */
+/* Hide car SVG for parts cards to maximize parts list space */
 .parts-card .car-svg-container {
-    padding: 6px 12px;
-    min-height: 60px;
-    gap: 4px;
-}
-
-.parts-card .car-svg {
-    height: 45px;
+    display: none;
 }
 
 .car-svg {
@@ -582,32 +576,32 @@ body {
     color: #059669;
 }
 
-/* Parts Checklist - Two Column Layout for TV Display */
+/* Parts Checklist - Clean two column layout */
 .parts-checklist {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
-    gap: 3px 6px !important;
-    padding: 6px !important;
-    overflow: hidden !important;
+    gap: 6px 10px !important;
+    padding: 10px !important;
+    overflow-y: auto !important;
 }
 
 .parts-checklist .checklist-item {
-    padding: 4px 6px !important;
-    min-height: 24px !important;
-    gap: 5px !important;
-    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    min-height: 32px !important;
+    gap: 8px !important;
+    border-radius: 6px !important;
 }
 
 .parts-checklist .checklist-item label {
-    font-size: 10px !important;
+    font-size: 14px !important;
     font-weight: 500 !important;
     line-height: 1.2 !important;
 }
 
 /* Parts Indicator (replaces checkbox for parts) */
 .parts-indicator {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
@@ -618,8 +612,8 @@ body {
 
 /* Parts indicator size for TV viewing */
 .parts-checklist .parts-indicator {
-    width: 28px !important;
-    height: 28px !important;
+    width: 20px !important;
+    height: 20px !important;
 }
 
 /* Parts State: Grey - Not eligible for current car */
@@ -648,10 +642,10 @@ body {
 
 .parts-state-present .parts-indicator::after {
     content: '';
-    width: 8px;
-    height: 13px;
+    width: 5px;
+    height: 9px;
     border: solid white;
-    border-width: 0 3px 3px 0;
+    border-width: 0 2px 2px 0;
     transform: rotate(45deg);
     margin-bottom: 2px;
 }
@@ -674,7 +668,7 @@ body {
     content: '!';
     color: white;
     font-weight: 700;
-    font-size: 18px;
+    font-size: 12px;
     line-height: 1;
 }
 
