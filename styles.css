@@ -696,7 +696,7 @@ body {
 }
 
 .vin-label {
-    font-size: 13px;
+    font-size: 18px;
     font-weight: 600;
     color: #64748b;
     letter-spacing: 0.05em;
@@ -704,7 +704,7 @@ body {
 
 .vin-code {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 15px;
+    font-size: 22px;
     font-weight: 600;
     color: #2c3e50;
     letter-spacing: 0.08em;
