@@ -710,7 +710,7 @@ body {
     letter-spacing: 0.08em;
 }
 
-/* Status Popover - Full screen overlay */
+/* Status Popover - Full screen overlay - FLASHY for TV viewing */
 .status-popover {
     position: fixed;
     inset: 0;
@@ -720,7 +720,7 @@ body {
     justify-content: center;
     opacity: 0;
     visibility: hidden;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
     pointer-events: none;
 }
 
@@ -728,16 +728,24 @@ body {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(0, 0, 0, 0.7);
 }
 
 .status-popover.show {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 .status-popover.show .popover-content {
     transform: scale(1) translateY(0);
+    animation: popover-entrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popover-entrance {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .popover-content {
@@ -746,85 +754,104 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    width: 40vw;
-    height: 40vh;
-    min-width: 420px;
-    min-height: 320px;
-    background: rgba(255, 255, 255, 0.75);
+    gap: 24px;
+    width: 85vw;
+    height: 85vh;
+    max-width: 1400px;
+    max-height: 900px;
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 32px;
-    box-shadow:
-        0 32px 64px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 8px solid;
+    border-radius: 40px;
+    box-shadow: 0 0 100px rgba(0, 0, 0, 0.5);
     transform: scale(0.9) translateY(20px);
     transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 40px;
+    overflow: hidden;
 }
 
-/* Success state card tint */
+/* Success state card */
 .popover-content:has(.popover-icon.success) {
-    background: rgba(240, 253, 244, 0.8);
-    border-color: rgba(34, 197, 94, 0.3);
+    background: linear-gradient(145deg, #ecfdf5 0%, #d1fae5 100%);
+    border-color: #22c55e;
+    animation: success-glow 1s ease-in-out infinite alternate;
 }
 
-/* Failure state card tint */
+@keyframes success-glow {
+    0% { box-shadow: 0 0 60px rgba(34, 197, 94, 0.6), inset 0 0 60px rgba(34, 197, 94, 0.1); }
+    100% { box-shadow: 0 0 120px rgba(34, 197, 94, 0.9), inset 0 0 80px rgba(34, 197, 94, 0.2); }
+}
+
+/* Failure state card */
 .popover-content:has(.popover-icon.failure) {
-    background: rgba(254, 242, 242, 0.8);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: linear-gradient(145deg, #fef2f2 0%, #fecaca 100%);
+    border-color: #ef4444;
+    animation: failure-flash 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes failure-flash {
+    0% {
+        box-shadow: 0 0 60px rgba(239, 68, 68, 0.6), inset 0 0 60px rgba(239, 68, 68, 0.1);
+        border-color: #ef4444;
+    }
+    100% {
+        box-shadow: 0 0 150px rgba(239, 68, 68, 1), inset 0 0 100px rgba(239, 68, 68, 0.3);
+        border-color: #dc2626;
+    }
 }
 
 .popover-icon {
-    width: 140px;
-    height: 140px;
+    width: 200px;
+    height: 200px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
+    flex-shrink: 0;
 }
 
 .popover-icon.success {
     background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
-    box-shadow: 0 16px 48px rgba(34, 197, 94, 0.5);
-    animation: pulse-success 1.5s ease-in-out infinite;
+    box-shadow: 0 20px 60px rgba(34, 197, 94, 0.6);
+    animation: pulse-success-big 1s ease-in-out infinite;
 }
 
-@keyframes pulse-success {
-    0%, 100% { transform: scale(1); box-shadow: 0 16px 48px rgba(34, 197, 94, 0.5); }
-    50% { transform: scale(1.05); box-shadow: 0 20px 60px rgba(34, 197, 94, 0.6); }
+@keyframes pulse-success-big {
+    0%, 100% { transform: scale(1); box-shadow: 0 20px 60px rgba(34, 197, 94, 0.6); }
+    50% { transform: scale(1.1); box-shadow: 0 30px 80px rgba(34, 197, 94, 0.8); }
 }
 
 .popover-icon.success::after {
     content: '';
-    width: 40px;
-    height: 70px;
+    width: 60px;
+    height: 100px;
     border: solid white;
-    border-width: 0 10px 10px 0;
+    border-width: 0 16px 16px 0;
     transform: rotate(45deg);
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .popover-icon.failure {
     background: linear-gradient(145deg, #ef4444 0%, #dc2626 100%);
-    box-shadow: 0 16px 48px rgba(239, 68, 68, 0.5);
-    animation: pulse-failure 1.5s ease-in-out infinite;
+    box-shadow: 0 20px 60px rgba(239, 68, 68, 0.6);
+    animation: pulse-failure-big 0.4s ease-in-out infinite;
 }
 
-@keyframes pulse-failure {
-    0%, 100% { transform: scale(1); box-shadow: 0 16px 48px rgba(239, 68, 68, 0.5); }
-    50% { transform: scale(1.05); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.6); }
+@keyframes pulse-failure-big {
+    0%, 100% { transform: scale(1); box-shadow: 0 20px 60px rgba(239, 68, 68, 0.6); }
+    50% { transform: scale(1.15); box-shadow: 0 30px 100px rgba(239, 68, 68, 1); }
 }
 
 .popover-icon.failure::before,
 .popover-icon.failure::after {
     content: '';
     position: absolute;
-    width: 70px;
-    height: 10px;
+    width: 100px;
+    height: 16px;
     background: white;
-    border-radius: 5px;
+    border-radius: 8px;
 }
 
 .popover-icon.failure::before {
@@ -837,18 +864,127 @@ body {
 
 .popover-text {
     font-family: 'Inter', sans-serif;
-    font-size: 36px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: 80px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .popover-text.success {
     color: #16a34a;
+    animation: text-glow-success 1s ease-in-out infinite alternate;
+}
+
+@keyframes text-glow-success {
+    0% { text-shadow: 0 4px 20px rgba(34, 197, 94, 0.4); }
+    100% { text-shadow: 0 4px 40px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.4); }
 }
 
 .popover-text.failure {
     color: #dc2626;
+    animation: text-flash-failure 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes text-flash-failure {
+    0% { text-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); opacity: 1; }
+    100% { text-shadow: 0 4px 50px rgba(239, 68, 68, 1), 0 0 80px rgba(239, 68, 68, 0.6); opacity: 0.9; }
+}
+
+/* Failed Lamps Container */
+.failed-lamps-container {
+    display: none;
+    width: 100%;
+    max-width: 800px;
+    margin-top: 10px;
+    padding: 20px 30px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 3px solid #ef4444;
+    border-radius: 20px;
+    max-height: 35vh;
+    overflow-y: auto;
+}
+
+.failed-lamps-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: #dc2626;
+    text-align: center;
+    margin-bottom: 16px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.failed-lamps-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+}
+
+.failed-lamp-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: white;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    animation: failed-item-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes failed-item-pulse {
+    0% { transform: scale(1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+    100% { transform: scale(1.02); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4); }
+}
+
+.failed-lamp-x {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #ef4444;
+    color: white;
+    font-size: 24px;
+    font-weight: 900;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.failed-lamp-name {
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.failed-lamp-section {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+/* Scrollbar for failed lamps */
+.failed-lamps-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.failed-lamps-container::-webkit-scrollbar-track {
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 4px;
+}
+
+.failed-lamps-container::-webkit-scrollbar-thumb {
+    background: #ef4444;
+    border-radius: 4px;
+}
+
+.failed-lamps-container::-webkit-scrollbar-thumb:hover {
+    background: #dc2626;
 }
 
 /* Print Styles */

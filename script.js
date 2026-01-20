@@ -238,6 +238,32 @@ function updateVinDisplay(vin) {
     }
 }
 
+// Get failed lamps from cached API data (lamps with value 0)
+function getFailedLamps() {
+    const failedLamps = [];
+    if (!cachedApiData) return failedLamps;
+
+    // Check front lamps
+    if (cachedApiData.front) {
+        for (const [name, value] of Object.entries(cachedApiData.front)) {
+            if (value === 0) {
+                failedLamps.push({ name: toTitleCase(name), section: 'Front' });
+            }
+        }
+    }
+
+    // Check rear lamps
+    if (cachedApiData.rear) {
+        for (const [name, value] of Object.entries(cachedApiData.rear)) {
+            if (value === 0) {
+                failedLamps.push({ name: toTitleCase(name), section: 'Rear' });
+            }
+        }
+    }
+
+    return failedLamps;
+}
+
 // Show status popover
 function showStatusPopover(status) {
     console.log('[POPOVER] showStatusPopover called with status:', status);
@@ -245,6 +271,8 @@ function showStatusPopover(status) {
     const popover = document.getElementById('status-popover');
     const popoverIcon = document.getElementById('popover-icon');
     const popoverText = document.getElementById('popover-text');
+    const failedLampsContainer = document.getElementById('failed-lamps-container');
+    const failedLampsList = document.getElementById('failed-lamps-list');
 
     console.log('[POPOVER] DOM elements found:', {
         popover: !!popover,
@@ -271,7 +299,32 @@ function showStatusPopover(status) {
 
     popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
     popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
-    popoverText.textContent = isSuccess ? 'Test Passed' : 'Test Failed';
+    popoverText.textContent = isSuccess ? 'PASSED' : 'FAILED';
+
+    // Handle failed lamps display
+    if (failedLampsContainer && failedLampsList) {
+        if (!isSuccess) {
+            // Get failed lamps and display them
+            const failedLamps = getFailedLamps();
+            console.log('[POPOVER] Failed lamps:', failedLamps);
+
+            if (failedLamps.length > 0) {
+                failedLampsList.innerHTML = failedLamps.map(lamp =>
+                    `<div class="failed-lamp-item">
+                        <span class="failed-lamp-x">X</span>
+                        <span class="failed-lamp-name">${lamp.name}</span>
+                        <span class="failed-lamp-section">(${lamp.section})</span>
+                    </div>`
+                ).join('');
+                failedLampsContainer.style.display = 'block';
+            } else {
+                failedLampsContainer.style.display = 'none';
+            }
+        } else {
+            // Hide failed lamps for success
+            failedLampsContainer.style.display = 'none';
+        }
+    }
 
     // Show popover
     console.log('[POPOVER] Adding "show" class to popover');
