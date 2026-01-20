@@ -119,30 +119,48 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     container.innerHTML = '';
 
     items.forEach(([key, value]) => {
-        const checkboxId = `${type}-${sectionName}-${key.replace(/\s+/g, '-')}`;
+        // Sanitize key for use in ID attribute (alphanumeric, hyphens, underscores only)
+        const sanitizedKey = key.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const checkboxId = `${type}-${sectionName}-${sanitizedKey}`;
         const label = toTitleCase(key);
+
+        // Create elements safely using DOM methods to prevent XSS
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'checklist-item';
 
         if (type === 'parts') {
             // Parts have 3 states: grey (0), blue (1), yellow (2)
             const stateClass = PARTS_STATES[value] || 'not-eligible';
-            const itemHTML = `
-                <div class="checklist-item parts-state-${stateClass}" data-state="${value}">
-                    <span class="parts-indicator"></span>
-                    <label>${label}</label>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHTML);
+            itemDiv.classList.add(`parts-state-${stateClass}`);
+            itemDiv.dataset.state = value;
+
+            const indicator = document.createElement('span');
+            indicator.className = 'parts-indicator';
+
+            const labelEl = document.createElement('label');
+            labelEl.textContent = label;
+
+            itemDiv.appendChild(indicator);
+            itemDiv.appendChild(labelEl);
         } else {
             // Lamps use checkbox (checked/unchecked)
             const isChecked = value === 1;
-            const itemHTML = `
-                <div class="checklist-item">
-                    <input type="checkbox" id="${checkboxId}" class="checkbox" ${isChecked ? 'checked' : ''}>
-                    <label for="${checkboxId}">${label}</label>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHTML);
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = checkboxId;
+            checkbox.className = 'checkbox';
+            checkbox.checked = isChecked;
+
+            const labelEl = document.createElement('label');
+            labelEl.htmlFor = checkboxId;
+            labelEl.textContent = label;
+
+            itemDiv.appendChild(checkbox);
+            itemDiv.appendChild(labelEl);
         }
+
+        container.appendChild(itemDiv);
     });
 }
 
@@ -309,13 +327,31 @@ function showStatusPopover(status) {
             console.log('[POPOVER] Failed lamps:', failedLamps);
 
             if (failedLamps.length > 0) {
-                failedLampsList.innerHTML = failedLamps.map(lamp =>
-                    `<div class="failed-lamp-item">
-                        <span class="failed-lamp-x">X</span>
-                        <span class="failed-lamp-name">${lamp.name}</span>
-                        <span class="failed-lamp-section">(${lamp.section})</span>
-                    </div>`
-                ).join('');
+                // Clear existing content safely
+                failedLampsList.innerHTML = '';
+
+                // Create elements safely using textContent to prevent XSS
+                failedLamps.forEach(lamp => {
+                    const item = document.createElement('div');
+                    item.className = 'failed-lamp-item';
+
+                    const xSpan = document.createElement('span');
+                    xSpan.className = 'failed-lamp-x';
+                    xSpan.textContent = 'X';
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'failed-lamp-name';
+                    nameSpan.textContent = lamp.name;
+
+                    const sectionSpan = document.createElement('span');
+                    sectionSpan.className = 'failed-lamp-section';
+                    sectionSpan.textContent = `(${lamp.section})`;
+
+                    item.appendChild(xSpan);
+                    item.appendChild(nameSpan);
+                    item.appendChild(sectionSpan);
+                    failedLampsList.appendChild(item);
+                });
                 failedLampsContainer.style.display = 'block';
             } else {
                 failedLampsContainer.style.display = 'none';
