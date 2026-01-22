@@ -101,14 +101,16 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     }
 
     // Convert to array and sort by state for parts (required first, then present, then not-eligible)
-    // For lamps: unchecked (0) first, checked (1) last
+    // For lamps: failed (0) first, then passed (1), then not-applicable (2) at bottom
     const items = Object.entries(sectionData).sort((a, b) => {
         if (type === 'parts') {
             // Sort order: 2 (required/yellow) first, then 1 (present/blue), then 0 (not-eligible/grey)
             const order = { 2: 0, 1: 1, 0: 2 };
             return (order[a[1]] ?? 3) - (order[b[1]] ?? 3);
         }
-        return a[1] - b[1];
+        // Lamps sort order: 0 (failed/red) first, then 1 (passed/green), then 2 (N/A/grey) at bottom
+        const lampOrder = { 0: 0, 1: 1, 2: 2 };
+        return (lampOrder[a[1]] ?? 3) - (lampOrder[b[1]] ?? 3);
     });
 
     if (items.length === 0) {
@@ -143,21 +145,37 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
             itemDiv.appendChild(indicator);
             itemDiv.appendChild(labelEl);
         } else {
-            // Lamps use checkbox (checked/unchecked)
-            const isChecked = value === 1;
+            // Lamps: 0 = failed (red), 1 = passed (green), 2 = not applicable (grey)
+            if (value === 2) {
+                // Not applicable - grey indicator
+                itemDiv.classList.add('lamp-state-na');
+                itemDiv.dataset.state = value;
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = checkboxId;
-            checkbox.className = 'checkbox';
-            checkbox.checked = isChecked;
+                const indicator = document.createElement('span');
+                indicator.className = 'lamp-na-indicator';
 
-            const labelEl = document.createElement('label');
-            labelEl.htmlFor = checkboxId;
-            labelEl.textContent = label;
+                const labelEl = document.createElement('label');
+                labelEl.textContent = label;
 
-            itemDiv.appendChild(checkbox);
-            itemDiv.appendChild(labelEl);
+                itemDiv.appendChild(indicator);
+                itemDiv.appendChild(labelEl);
+            } else {
+                // Lamps use checkbox (checked/unchecked)
+                const isChecked = value === 1;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = checkboxId;
+                checkbox.className = 'checkbox';
+                checkbox.checked = isChecked;
+
+                const labelEl = document.createElement('label');
+                labelEl.htmlFor = checkboxId;
+                labelEl.textContent = label;
+
+                itemDiv.appendChild(checkbox);
+                itemDiv.appendChild(labelEl);
+            }
         }
 
         container.appendChild(itemDiv);
