@@ -265,11 +265,12 @@ let cachedApiData = null;
 // Update VIN display
 function updateVinDisplay(vin) {
     const vinCodeElement = document.getElementById('vin-code');
-    if (vinCodeElement && vin) {
+    if (vinCodeElement && typeof vin === 'string') {
         if (currentVin !== vin) {
             console.log('[VIN] Updated:', vin);
         }
-        vinCodeElement.textContent = vin;
+        // Show placeholder for empty string, otherwise show the VIN
+        vinCodeElement.textContent = vin || '--';
         currentVin = vin;
     }
 }
@@ -447,7 +448,8 @@ async function fetchVinNumber() {
         console.log('[API] VIN response:', data);
 
         // Update VIN display - response format: { "vin": "..." }
-        if (data.vin) {
+        // Use typeof check to allow empty strings to clear the VIN
+        if (typeof data.vin === 'string') {
             updateVinDisplay(data.vin);
         }
     } catch (error) {
