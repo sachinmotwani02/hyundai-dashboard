@@ -395,6 +395,26 @@ function showStatusPopover(status) {
     }, 8000);
 }
 
+// Update persistent cycle status banner
+function updateCycleStatusBanner(status) {
+    const banner = document.getElementById('cycle-status-value');
+    if (!banner) return;
+
+    // Remove all state classes
+    banner.classList.remove('waiting', 'passed', 'failed');
+
+    if (status === 0) {
+        banner.textContent = 'PASSED';
+        banner.classList.add('passed');
+    } else if (status === 1) {
+        banner.textContent = 'FAILED';
+        banner.classList.add('failed');
+    } else {
+        banner.textContent = 'WAITING';
+        banner.classList.add('waiting');
+    }
+}
+
 // Check if status changed and show popover
 // Status: 0 = OK (passed), 1 = NG (failed), 2 = Wait (no popover)
 function handleStatusChange(newStatus) {
@@ -407,6 +427,9 @@ function handleStatusChange(newStatus) {
         lastStatusName: statusNames[lastOverallStatus] ?? 'null',
         statusChanged: lastOverallStatus !== newStatus
     });
+
+    // Always update the persistent banner regardless of status
+    updateCycleStatusBanner(newStatus);
 
     // Status 2 means waiting - don't show popover
     if (newStatus === 2) {
@@ -484,9 +507,11 @@ async function fetchOverallStatus() {
         console.log('[API] overall_status value in response:', data.overall_status, '(type:', typeof data.overall_status + ')');
 
         // Handle status change (0 = OK, 1 = NG, 2 = Wait)
+        // Convert to number to avoid strict equality failures if API returns string
         if (data.overall_status !== undefined) {
-            console.log('[API] >>> Calling handleStatusChange with:', data.overall_status);
-            handleStatusChange(data.overall_status);
+            const statusValue = Number(data.overall_status);
+            console.log('[API] >>> Calling handleStatusChange with:', statusValue, '(converted from:', data.overall_status, typeof data.overall_status + ')');
+            handleStatusChange(statusValue);
         } else {
             console.warn('[API] WARNING: overall_status not found in response. Response keys:', Object.keys(data));
         }
