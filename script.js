@@ -504,16 +504,18 @@ async function fetchOverallStatus() {
 
         const data = await response.json();
         console.log('[API] overall_status response data:', JSON.stringify(data));
-        console.log('[API] overall_status value in response:', data.overall_status, '(type:', typeof data.overall_status + ')');
 
         // Handle status change (0 = OK, 1 = NG, 2 = Wait)
-        // Convert to number to avoid strict equality failures if API returns string
-        if (data.overall_status !== undefined) {
-            const statusValue = Number(data.overall_status);
-            console.log('[API] >>> Calling handleStatusChange with:', statusValue, '(converted from:', data.overall_status, typeof data.overall_status + ')');
+        // Check multiple possible field names: overall_status, status, value
+        const rawStatus = data.overall_status ?? data.status ?? data.value;
+        console.log('[API] overall_status raw value:', rawStatus, '(type:', typeof rawStatus + ')');
+
+        if (rawStatus !== undefined) {
+            const statusValue = Number(rawStatus);
+            console.log('[API] >>> Calling handleStatusChange with:', statusValue, '(converted from:', rawStatus, typeof rawStatus + ')');
             handleStatusChange(statusValue);
         } else {
-            console.warn('[API] WARNING: overall_status not found in response. Response keys:', Object.keys(data));
+            console.warn('[API] WARNING: status not found in response. Response keys:', Object.keys(data));
         }
     } catch (error) {
         console.error('[API] Error fetching overall_status:', error.message);
