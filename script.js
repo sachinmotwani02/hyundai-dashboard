@@ -65,7 +65,9 @@ let currentStructure = null;
 
 // VIN and status tracking
 let currentVin = null;
-let lastOverallStatus = null;
+// Use a unique sentinel to distinguish "not yet received any API response" from "received status 2"
+// This is important because null could be confused with valid states in some edge cases
+let lastOverallStatus = 'UNINITIALIZED';
 let statusPopoverTimeout = null;
 
 
@@ -420,12 +422,16 @@ function updateCycleStatusBanner(status) {
 function handleStatusChange(newStatus) {
     const statusNames = { 0: 'OK', 1: 'NG', 2: 'WAIT' };
 
+    // Check if this is the first API response (before any status was received)
+    const isFirstResponse = lastOverallStatus === 'UNINITIALIZED';
+
     console.log('[STATUS] handleStatusChange called:', {
         newStatus: newStatus,
         newStatusName: statusNames[newStatus] ?? 'UNKNOWN',
         lastOverallStatus: lastOverallStatus,
-        lastStatusName: statusNames[lastOverallStatus] ?? 'null',
-        statusChanged: lastOverallStatus !== newStatus
+        lastStatusName: isFirstResponse ? 'UNINITIALIZED' : (statusNames[lastOverallStatus] ?? 'UNKNOWN'),
+        isFirstResponse: isFirstResponse,
+        statusChanged: !isFirstResponse && lastOverallStatus !== newStatus
     });
 
     // Always update the persistent banner regardless of status
@@ -438,11 +444,17 @@ function handleStatusChange(newStatus) {
         return;
     }
 
-    // Only show popover if status changed to 0 or 1
-    const shouldShowPopover = lastOverallStatus !== newStatus && (newStatus === 0 || newStatus === 1);
+    // Show popover if:
+    // 1. This is the first valid (0 or 1) API response, OR
+    // 2. Status changed from a previous valid status
+    const isPassOrFail = newStatus === 0 || newStatus === 1;
+    const statusChanged = !isFirstResponse && lastOverallStatus !== newStatus;
+    const shouldShowPopover = isPassOrFail && (isFirstResponse || statusChanged);
+
     console.log('[STATUS] Should show popover?', shouldShowPopover, {
-        statusChanged: lastOverallStatus !== newStatus,
-        isValidStatus: newStatus === 0 || newStatus === 1
+        isFirstResponse: isFirstResponse,
+        statusChanged: statusChanged,
+        isPassOrFail: isPassOrFail
     });
 
     if (shouldShowPopover) {
@@ -450,8 +462,8 @@ function handleStatusChange(newStatus) {
         showStatusPopover(newStatus);
     } else {
         console.log('[STATUS] NOT showing popover. Reasons:', {
-            sameAsPrevious: lastOverallStatus === newStatus,
-            invalidStatus: newStatus !== 0 && newStatus !== 1
+            sameAsPrevious: !isFirstResponse && lastOverallStatus === newStatus,
+            invalidStatus: !isPassOrFail
         });
     }
     lastOverallStatus = newStatus;
@@ -483,7 +495,9 @@ async function fetchVinNumber() {
 // Fetch overall_status from separate endpoint via POST
 async function fetchOverallStatus() {
     const url = getOverallStatusUrl();
-    const payload = { value: lastOverallStatus ?? 2 };
+    // Send 2 (waiting) if we haven't received any status yet, otherwise send the last known status
+    const statusToSend = (lastOverallStatus === 'UNINITIALIZED' || lastOverallStatus === null) ? 2 : lastOverallStatus;
+    const payload = { value: statusToSend };
 
     console.log('[API] POST overall_status:', url, 'payload:', JSON.stringify(payload));
 
@@ -659,7 +673,7 @@ function handleBoothChange(port, updateUrl = true) {
     currentStructure = null;
     isLiveVideoLoaded = false;
     currentVin = null;
-    lastOverallStatus = null;
+    lastOverallStatus = 'UNINITIALIZED';
 
     // Reset VIN display
     const vinCodeElement = document.getElementById('vin-code');
@@ -720,5 +734,10 @@ console.log(`Starting with Booth ${initialBooth} (port ${currentPort})`);
 loadLiveVideos();
 
 // Start polling for status from API
-fetchStatus();
-setInterval(fetchStatus, POLL_INTERVAL);
+// Small delay on first fetch to ensure DOM and CSS are fully rendered
+// This prevents the popup from showing before the page is visually ready
+setTimeout(() => {
+    console.log('[INIT] Starting first status fetch after DOM stabilization delay');
+    fetchStatus();
+    setInterval(fetchStatus, POLL_INTERVAL);
+}, 100);
