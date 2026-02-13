@@ -39,7 +39,7 @@ function getStatusUrl() {
 }
 
 function getLiveVideoUrl() {
-    return `http://${getBaseHost()}:${currentPort}/video_feed`;
+    return `http://${getBaseHost()}:${currentPort}/live`;
     // return `http://192.168.1.245:5000/live`;
 }
 
@@ -69,9 +69,6 @@ let currentVin = null;
 // This is important because null could be confused with valid states in some edge cases
 let lastOverallStatus = 'UNINITIALIZED';
 let statusPopoverTimeout = null;
-let countdownInterval = null;
-const COUNTDOWN_DURATION = 5; // 5 seconds
-const IS_MOCK_TEST_ENABLED = false; // Toggle this for deployment
 
 
 // DOM Elements
@@ -341,7 +338,7 @@ function showStatusPopover(status) {
 
     popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
     popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
-    popoverText.textContent = isSuccess ? 'PASSED' : 'PLEASE RETRY';
+    popoverText.textContent = isSuccess ? 'PASSED' : 'FAILED';
 
     // Handle failed lamps display
     if (failedLampsContainer && failedLampsList) {
@@ -380,7 +377,6 @@ function showStatusPopover(status) {
             } else {
                 failedLampsContainer.style.display = 'none';
             }
-
         } else {
             // Hide failed lamps for success
             failedLampsContainer.style.display = 'none';
@@ -390,78 +386,15 @@ function showStatusPopover(status) {
     // Show popover
     console.log('[POPOVER] Adding "show" class to popover');
     popover.classList.add('show');
+    console.log('[POPOVER] Popover classList after adding show:', popover.classList.toString());
+    console.log('[POPOVER] Popover computed visibility:', window.getComputedStyle(popover).visibility);
+    console.log('[POPOVER] Popover computed opacity:', window.getComputedStyle(popover).opacity);
 
-    // Start circular countdown timer
-    startCountdown();
-
-    // Auto-hide popover after countdown for all states (Success and Failure)
+    // Hide after 8 seconds
     statusPopoverTimeout = setTimeout(() => {
-        console.log('[POPOVER] Auto-hiding popover after countdown');
+        console.log('[POPOVER] Auto-hiding popover after 8 seconds');
         popover.classList.remove('show');
-        if (countdownInterval) clearInterval(countdownInterval);
-    }, COUNTDOWN_DURATION * 1000);
-}
-
-// Circular countdown timer logic
-function startCountdown() {
-    const timerText = document.getElementById('timer-text');
-    const timerProgress = document.getElementById('timer-progress');
-    let timeLeft = COUNTDOWN_DURATION;
-
-    // Total circumference for r=45 is ~283
-    const circumference = 2 * Math.PI * 45;
-
-    if (timerText) timerText.textContent = timeLeft;
-    if (timerProgress) {
-        timerProgress.style.strokeDasharray = circumference;
-        timerProgress.style.strokeDashoffset = 0;
-    }
-
-    if (countdownInterval) clearInterval(countdownInterval);
-
-    countdownInterval = setInterval(() => {
-        timeLeft -= 1;
-        if (timeLeft < 0) timeLeft = 0;
-
-        if (timerText) timerText.textContent = timeLeft;
-
-        if (timerProgress) {
-            const offset = circumference - (timeLeft / COUNTDOWN_DURATION) * circumference;
-            timerProgress.style.strokeDashoffset = offset;
-        }
-
-        if (timeLeft <= 0) {
-            clearInterval(countdownInterval);
-        }
-    }, 1000);
-}
-
-// Mock test functionality for local testing
-function triggerMockPass() {
-    console.log('[MOCK] Triggering mock PASS');
-    cachedApiData = {
-        front: { "High Beam LH": 1, "High Beam RH": 1, "Low Beam LH": 1, "Low Beam RH": 1 },
-        rear: { "Tail Lamp LH": 1, "Tail Lamp RH": 1, "Brake Light": 1 }
-    };
-    lastOverallStatus = 'UNINITIALIZED';
-    handleStatusChange(0);
-}
-
-function triggerMockFail() {
-    console.log('[MOCK] Triggering mock FAIL');
-    cachedApiData = {
-        front: {
-            "High Beam LH": 0,
-            "Low Beam RH": 1,
-            "Turn Signal LH": 0
-        },
-        rear: {
-            "Tail Lamp RH": 1,
-            "Brake Light": 0
-        }
-    };
-    lastOverallStatus = 'UNINITIALIZED';
-    handleStatusChange(1);
+    }, 8000);
 }
 
 // Update persistent cycle status banner
@@ -668,60 +601,33 @@ function getVideoContentWrapper() {
     return wrapper;
 }
 
-// Fetch and load live video feed with quad-quadrant cropping
+// Fetch and load live video feed
 async function loadLiveVideos() {
     try {
-        // 1. Fetch cropping coordinates for the current booth
-        const boothId = getBoothFromUrl();
-        const configResponse = await fetch(`/config?booth=${boothId}`);
-        const config = await configResponse.json();
+        const response = await fetch(getLiveVideoUrl());
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
 
-        // 2. Clear existing content in wrapper
+        console.log('Received HTML length:', html.length);
+        console.log('HTML preview:', html.substring(0, 200));
+
+        // Extract body content from full HTML document
+        // Create a temporary DOM parser to extract body content
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const bodyContent = doc.body ? doc.body.innerHTML : html;
+
+        // Insert the extracted body content into wrapper (preserves VIN and popover)
         const wrapper = getVideoContentWrapper();
-        wrapper.innerHTML = '';
-
-        // 3. Define the quadrants we want to display
-        const quadrants = ['front', 'rear', 'left', 'right'];
-        const streamUrl = getLiveVideoUrl();
-
-        // 4. Create 4 quadrants
-        quadrants.forEach(quad => {
-            const quadContainer = document.createElement('div');
-            quadContainer.className = `quadrant-container quad-${quad}`;
-
-            // Set CSS variables for cropping
-            if (config[quad]) {
-                const [x, y, w, h] = config[quad];
-                quadContainer.style.setProperty('--crop-x', x);
-                quadContainer.style.setProperty('--crop-y', y);
-                quadContainer.style.setProperty('--crop-w', w);
-                quadContainer.style.setProperty('--crop-h', h);
-            } else {
-                // Fallback to defaults if config is missing
-                const defaults = {
-                    front: [0, 0, 50, 50],
-                    rear: [50, 0, 50, 50],
-                    left: [0, 50, 50, 50],
-                    right: [50, 50, 50, 50]
-                };
-                const [x, y, w, h] = defaults[quad];
-                quadContainer.style.setProperty('--crop-x', x);
-                quadContainer.style.setProperty('--crop-y', y);
-                quadContainer.style.setProperty('--crop-w', w);
-                quadContainer.style.setProperty('--crop-h', h);
-            }
-
-            const img = document.createElement('img');
-            img.src = streamUrl;
-            img.className = 'quadrant-stream';
-            img.alt = `${quad.toUpperCase()} VIEW`;
-
-            quadContainer.appendChild(img);
-            wrapper.appendChild(quadContainer);
-        });
-
+        wrapper.innerHTML = bodyContent;
         isLiveVideoLoaded = true;
-        console.log('Live video feed with quad-cropping loaded successfully');
+
+        console.log('Live video feed loaded successfully');
+        console.log('Videos container children:', videosContainer.children.length);
+        console.log('Container display:', window.getComputedStyle(videosContainer).display);
+        console.log('Container height:', window.getComputedStyle(videosContainer).height);
     } catch (error) {
         console.error('Error loading live videos:', error);
         console.log('Falling back to static images');
@@ -732,16 +638,16 @@ async function loadLiveVideos() {
             // If it was previously loaded but now failed, or no content, show static images
             wrapper.innerHTML = `
                 <div class="video-wrapper">
-                    <img src="/scene-1.png" alt="Front View" class="vehicle-image">
+                    <img src="scene-1.png" alt="Front View" class="vehicle-image">
                 </div>
                 <div class="video-wrapper">
-                    <img src="/scene-2.png" alt="Right View" class="vehicle-image">
+                    <img src="scene-2.png" alt="Right View" class="vehicle-image">
                 </div>
                 <div class="video-wrapper">
-                    <img src="/scene-3.png" alt="Left View" class="vehicle-image">
+                    <img src="scene-3.png" alt="Left View" class="vehicle-image">
                 </div>
                 <div class="video-wrapper">
-                    <img src="/scene-4.png" alt="Back View" class="vehicle-image">
+                    <img src="scene-4.png" alt="Back View" class="vehicle-image">
                 </div>
             `;
             isLiveVideoLoaded = false;
@@ -786,22 +692,6 @@ if (boothSelect) {
     boothSelect.addEventListener('change', (e) => {
         handleBoothChange(e.target.value);
     });
-}
-
-// Initialize mock test buttons
-const mockPassBtn = document.getElementById('mock-pass-btn');
-const mockFailBtn = document.getElementById('mock-fail-btn');
-const mockTestContainer = document.querySelector('.mock-test-container');
-
-if (mockPassBtn) mockPassBtn.addEventListener('click', triggerMockPass);
-if (mockFailBtn) mockFailBtn.addEventListener('click', triggerMockFail);
-
-if (mockTestContainer) {
-    if (IS_MOCK_TEST_ENABLED) {
-        mockTestContainer.classList.remove('hidden');
-    } else {
-        mockTestContainer.classList.add('hidden');
-    }
 }
 
 // Handle browser back/forward navigation

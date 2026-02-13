@@ -73,7 +73,6 @@ body {
     0% {
         background-position: 50% 50%, 50% 50%;
     }
-
     100% {
         background-position: 350% 50%, 350% 50%;
     }
@@ -117,18 +116,12 @@ body {
     height: 28px;
 }
 
-/* Booth Selector & Mock Test Container */
-.booth-selector-container {
+/* Booth Selector */
+.booth-selector {
     position: absolute;
     top: 8px;
     right: 12px;
     z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.booth-selector {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -139,45 +132,6 @@ body {
     border: 1.5px solid rgba(255, 255, 255, 0.9);
     border-radius: 6px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-}
-
-.mock-test-btn {
-    padding: 6px 14px;
-    font-size: 14px;
-    font-weight: 700;
-    color: #ffffff;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    letter-spacing: 0.05em;
-}
-
-.mock-test-btn.mock-pass {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-}
-
-.mock-test-btn.mock-fail {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.mock-test-btn:hover {
-    transform: translateY(-1px);
-    filter: brightness(1.1);
-}
-
-.mock-test-btn.mock-pass:hover {
-    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
-}
-
-.mock-test-btn.mock-fail:hover {
-    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
-}
-
-.mock-test-btn:active {
-    transform: translateY(0);
 }
 
 .booth-selector label {
@@ -255,52 +209,36 @@ body {
 .video-content-wrapper {
     flex: 1;
     width: 100%;
-    height: 100%;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Single video fills entire container */
-.video-content-wrapper>div {
-    position: relative;
+.video-content-wrapper > div {
+    flex: 1;
     width: 100% !important;
     height: 100% !important;
     min-height: 0;
-    display: block;
-    overflow: hidden;
-    border-radius: 8px;
-    background: #000;
+    display: flex;
 }
 
 /* Override inline styles on images from backend */
-/* Quadrant Cropping Logic */
-.quadrant-stream {
-    position: absolute;
-    width: calc(100% * (100 / var(--crop-w))) !important;
-    height: calc(100% * (100 / var(--crop-h))) !important;
-    left: calc(-1% * var(--crop-x) * (100 / var(--crop-w))) !important;
-    top: calc(-1% * var(--crop-y) * (100 / var(--crop-h))) !important;
-    object-fit: fill !important;
-    display: block !important;
-}
-
 .videos-container img[style],
 .videos-container img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    flex: 1;
+    min-height: 0;
 }
 
 .videos-container video,
 .videos-container iframe {
     width: 100% !important;
     height: 100% !important;
-    object-fit: contain !important;
-    /* Changed from cover to prevent cropping */
+    object-fit: cover !important;
     display: block !important;
 }
 
@@ -308,8 +246,7 @@ body {
     border-radius: 12px;
     overflow: hidden;
     position: relative;
-    background: #000;
-    /* Professional black background for letterboxing */
+    background: #fff;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
     height: 100%;
@@ -324,8 +261,7 @@ body {
 .vehicle-image {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    /* Changed from cover to prevent cropping */
+    object-fit: cover;
     display: block;
 }
 
@@ -621,7 +557,7 @@ body {
     transform: translate(-50%, -50%) rotate(45deg);
 }
 
-.checkbox:checked~label {
+.checkbox:checked ~ label {
     color: #059669;
 }
 
@@ -806,15 +742,24 @@ body {
     letter-spacing: 0.08em;
 }
 
-/* Hide Cycle Status Banner globally */
-#cycle-status-banner {
-    display: none !important;
-}
-
 /* Persistent Cycle Status Banner */
 .cycle-status-banner {
-    display: none !important;
-    /* Secondary backup */
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 42px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .cycle-status-label {
@@ -881,19 +826,9 @@ body {
 }
 
 @keyframes popover-entrance {
-    0% {
-        transform: scale(0.5);
-        opacity: 0;
-    }
-
-    50% {
-        transform: scale(1.05);
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .popover-content {
@@ -1070,11 +1005,6 @@ body {
     color: #6b7280;
 }
 
-/* Hidden state for mock test */
-.mock-test-container.hidden {
-    display: none;
-}
-
 /* Scrollbar for failed lamps */
 .failed-lamps-container::-webkit-scrollbar {
     width: 8px;
@@ -1092,72 +1022,6 @@ body {
 
 .failed-lamps-container::-webkit-scrollbar-thumb:hover {
     background: #dc2626;
-}
-
-/* Timer Circle Styles */
-.timer-container {
-    position: absolute;
-    top: 40px;
-    right: 40px;
-    width: 100px;
-    height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 20;
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 50%;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.timer-svg {
-    width: 80%;
-    height: 80%;
-    transform: rotate(-90deg);
-}
-
-.timer-bg {
-    fill: none;
-    stroke: rgba(0, 0, 0, 0.05);
-    stroke-width: 10;
-}
-
-.timer-progress {
-    fill: none;
-    stroke: #ffffff;
-    stroke-width: 10;
-    stroke-linecap: round;
-    stroke-dasharray: 283;
-    /* 2 * PI * 45 */
-    stroke-dashoffset: 0;
-    transition: stroke-dashoffset 0.1s linear;
-}
-
-.popover-content:has(.popover-icon.success) .timer-progress {
-    stroke: #22c55e;
-}
-
-.popover-content:has(.popover-icon.failure) .timer-progress {
-    stroke: #ef4444;
-}
-
-.timer-text {
-    position: absolute;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 36px;
-    font-weight: 800;
-    color: #1f2937;
-}
-
-.popover-content:has(.popover-icon.success) .timer-text {
-    color: #16a34a;
-}
-
-.popover-content:has(.popover-icon.failure) .timer-text {
-    color: #dc2626;
 }
 
 /* Print Styles */

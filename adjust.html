@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Adjustment - Hyundai Dashboard</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #002c5f;
+            --accent: #00aad2;
+            --success: #10b981;
+            --bg: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: #1e293b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-weight: 800;
+            margin: 0;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #booth-selector {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--primary);
+        }
+
+        button {
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-family: inherit;
+        }
+
+        .record-btn {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 170, 210, 0.2);
+        }
+
+        .save-btn {
+            background: var(--success);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .save-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .back-btn {
+            background: #cbd5e1;
+            color: #475569;
+        }
+
+        .main-container {
+            position: relative;
+            width: 100%;
+            max-width: 1000px;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+        }
+
+        #video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .selection-box {
+            position: absolute;
+            border: 2px solid #fff;
+            box-sizing: border-box;
+            pointer-events: all;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .selection-box::after {
+            content: attr(data-label);
+            pointer-events: none;
+        }
+
+        .selection-box .resizer {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #fff;
+            border: 1px solid var(--primary);
+            bottom: -5px;
+            right: -5px;
+            cursor: nwse-resize;
+            pointer-events: all;
+        }
+
+        .box-front {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        .box-rear {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .box-left {
+            border-color: #f59e0b;
+            color: #f59e0b;
+        }
+
+        .box-right {
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+        .info-panel {
+            width: 100%;
+            max-width: 1000px;
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .coords {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: #1e293b;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Video Quadrant Adjustment</h1>
+        <div class="controls">
+            <select id="booth-selector" onchange="changeBooth()">
+                <option value="1">Booth 1</option>
+                <option value="2">Booth 2</option>
+                <option value="3">Booth 3</option>
+            </select>
+            <button class="record-btn" onclick="triggerRecord()">Record 10s Raw</button>
+            <button class="back-btn" onclick="window.location.href='/dashboard/' + currentBooth">Back to
+                Dashboard</button>
+            <button class="save-btn" onclick="saveConfig()">Save Configuration</button>
+        </div>
+    </header>
+
+    <div class="main-container" id="container">
+        <!-- Replace with actual stream URL if needed -->
+        <img id="video-stream" src="" alt="Live Stream Feed" crossorigin="anonymous">
+
+        <div class="selection-box box-front" id="box-front" data-label="FRONT">
+            <div class="resizer" id="resize-front"></div>
+        </div>
+        <div class="selection-box box-rear" id="box-rear" data-label="REAR">
+            <div class="resizer" id="resize-rear"></div>
+        </div>
+        <div class="selection-box box-left" id="box-left" data-label="LEFT">
+            <div class="resizer" id="resize-left"></div>
+        </div>
+        <div class="selection-box box-right" id="box-right" data-label="RIGHT">
+            <div class="resizer" id="resize-right"></div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-card">
+            <h3>Front Quadrant</h3>
+            <div id="coords-front" class="coords">X: 0, Y: 0, W: 50, H: 50</div>
+        </div>
+        <div class="info-card">
+            <h3>Rear Quadrant</h3>
+            <div id="coords-rear" class="coords">X: 50, Y: 0, W: 50, H: 50</div>
+        </div>
+        <div class="info-card">
+            <h3>Left Quadrant</h3>
+            <div id="coords-left" class="coords">X: 0, Y: 50, W: 50, H: 50</div>
+        </div>
+        <div class="info-card">
+            <h3>Right Quadrant</h3>
+            <div id="coords-right" class="coords">X: 50, Y: 50, W: 50, H: 50</div>
+        </div>
+    </div>
+
+    <script>
+        const boxes = {
+            front: document.getElementById('box-front'),
+            rear: document.getElementById('box-rear'),
+            left: document.getElementById('box-left'),
+            right: document.getElementById('box-right')
+        };
+
+        const container = document.getElementById('container');
+        const boothSelector = document.getElementById('booth-selector');
+        const videoStream = document.getElementById('video-stream');
+
+        let currentConfig = {};
+        let currentBooth = '1';
+
+        const BOOTH_PORTS = {
+            '1': 5000,
+            '2': 5005,
+            '3': 5010
+        };
+
+        function changeBooth() {
+            currentBooth = boothSelector.value;
+            videoStream.src = `http://localhost:${BOOTH_PORTS[currentBooth]}/video_feed`;
+            loadConfig();
+        }
+
+        // Load current config
+        async function loadConfig() {
+            try {
+                const response = await fetch(`/config?booth=${currentBooth}`);
+                const config = await response.json();
+                currentConfig = config;
+
+                // Initialize positions
+                Object.keys(config).forEach(key => {
+                    if (boxes[key]) {
+                        const [x, y, w, h] = config[key];
+                        applyPosition(boxes[key], x, y, w, h);
+                        updateCoordsDisplay(key, x, y, w, h);
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to load config:', err);
+            }
+        }
+
+        function applyPosition(el, x, y, w, h) {
+            el.style.left = x + '%';
+            el.style.top = y + '%';
+            el.style.width = w + '%';
+            el.style.height = h + '%';
+        }
+
+        function updateCoordsDisplay(key, x, y, w, h) {
+            const el = document.getElementById(`coords-${key}`);
+            if (el) {
+                el.textContent = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}, W: ${w.toFixed(1)}, H: ${h.toFixed(1)}`;
+            }
+        }
+
+        // Draggable and Resizable logic
+        let activeEl = null;
+        let activeAction = null; // 'move' or 'resize'
+        let startX, startY, startLeft, startTop, startWidth, startHeight;
+
+        container.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('selection-box')) {
+                activeEl = e.target;
+                activeAction = 'move';
+            } else if (e.target.classList.contains('resizer')) {
+                activeEl = e.target.parentElement;
+                activeAction = 'resize';
+            }
+
+            if (activeEl) {
+                const rect = activeEl.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                startX = e.clientX;
+                startY = e.clientY;
+
+                startLeft = (rect.left - containerRect.left) / containerRect.width * 100;
+                startTop = (rect.top - containerRect.top) / containerRect.height * 100;
+                startWidth = rect.width / containerRect.width * 100;
+                startHeight = rect.height / containerRect.height * 100;
+
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!activeEl) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const dx = (e.clientX - startX) / containerRect.width * 100;
+            const dy = (e.clientY - startY) / containerRect.height * 100;
+
+            let x = startLeft, y = startTop, w = startWidth, h = startHeight;
+
+            if (activeAction === 'move') {
+                x = Math.max(0, Math.min(100 - w, startLeft + dx));
+                y = Math.max(0, Math.min(100 - h, startTop + dy));
+            } else if (activeAction === 'resize') {
+                w = Math.max(1, Math.min(100 - x, startWidth + dx));
+                h = Math.max(1, Math.min(100 - y, startHeight + dy));
+            }
+
+            applyPosition(activeEl, x, y, w, h);
+
+            const key = activeEl.id.split('-')[1];
+            currentConfig[key] = [x, y, w, h];
+            updateCoordsDisplay(key, x, y, w, h);
+        });
+
+        window.addEventListener('mouseup', () => {
+            activeEl = null;
+            activeAction = null;
+        });
+
+        async function saveConfig() {
+            try {
+                const response = await fetch(`/save_config?booth=${currentBooth}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentConfig)
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert(`Configuration for Booth ${currentBooth} saved!`);
+                }
+            } catch (err) {
+                console.error('Failed to save config:', err);
+                alert('Save failed.');
+            }
+        }
+
+        async function triggerRecord() {
+            try {
+                const response = await fetch(`/rec_raw?booth=${currentBooth}`);
+                const result = await response.json();
+                if (result.status === 'recording_started') {
+                    alert(`Started 10s recording for Booth ${currentBooth}. Check the 'recordings' folder when finished.`);
+                }
+            } catch (err) {
+                console.error('Recording trigger failed:', err);
+            }
+        }
+
+        changeBooth();
+    </script>
+</body>
+
+</html>

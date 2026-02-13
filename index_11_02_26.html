@@ -1,22 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hyundai Quality Control Dashboard</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
     <div class="dashboard-container">
         <!-- Header with Logos -->
         <header class="dashboard-header">
             <div class="logo-container">
-                <img src="/Hyundai.png" alt="Hyundai Logo" class="logo hyundai-logo">
+                <img src="Hyundai.png" alt="Hyundai Logo" class="logo hyundai-logo">
             </div>
             <div class="logo-container">
-                <img src="/DefectScanner.png" alt="Defect Scanner Logo" class="logo defect-logo">
+                <img src="DefectScanner.png" alt="Defect Scanner Logo" class="logo defect-logo">
             </div>
         </header>
 
@@ -32,20 +30,14 @@
             <span class="cycle-status-value" id="cycle-status-value">WAITING</span>
         </div>
 
-        <!-- Booth Selector & Mock Test -->
-        <div class="booth-selector-container">
-            <div class="mock-test-container">
-                <button id="mock-pass-btn" class="mock-test-btn mock-pass">MOCK PASS</button>
-                <button id="mock-fail-btn" class="mock-test-btn mock-fail">MOCK FAIL</button>
-            </div>
-            <div class="booth-selector">
-                <label for="booth-select">Booth:</label>
-                <select id="booth-select">
-                    <option value="5000" selected>Booth 1</option>
-                    <option value="5005">Booth 2</option>
-                    <option value="5010">Booth 3</option>
-                </select>
-            </div>
+        <!-- Booth Selector -->
+        <div class="booth-selector">
+            <label for="booth-select">Booth:</label>
+            <select id="booth-select">
+                <option value="5000" selected>Booth 1</option>
+                <option value="5005">Booth 2</option>
+                <option value="5010">Booth 3</option>
+            </select>
         </div>
 
         <div class="main-layout">
@@ -66,11 +58,8 @@
                 <div class="inspection-card parts-card" id="left-parts-card">
                     <div class="card-header">
                         <h2 class="card-title">
-                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
+                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>
                             </svg>
                             PARTS LEFT
                         </h2>
@@ -104,11 +93,8 @@
                 <div class="inspection-card parts-card" id="right-parts-card">
                     <div class="card-header">
                         <h2 class="card-title">
-                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
+                            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>
                             </svg>
                             PARTS RIGHT
                         </h2>
@@ -125,13 +111,6 @@
     <!-- Status Popover (Full Screen) -->
     <div class="status-popover" id="status-popover">
         <div class="popover-content">
-            <div class="timer-container" id="timer-container">
-                <svg class="timer-svg" viewBox="0 0 100 100">
-                    <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
-                    <circle class="timer-progress" id="timer-progress" cx="50" cy="50" r="45"></circle>
-                </svg>
-                <div class="timer-text" id="timer-text">10</div>
-            </div>
             <div class="popover-icon" id="popover-icon"></div>
             <div class="popover-text" id="popover-text"></div>
             <div class="failed-lamps-container" id="failed-lamps-container">
@@ -141,7 +120,6 @@
         </div>
     </div>
 
-    <script src="/script.js"></script>
+    <script src="script.js"></script>
 </body>
-
 </html>
