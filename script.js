@@ -85,15 +85,23 @@ const BLINK_LAMP_KEYS = new Set(['Left Turn Signal', 'Right Turn Signal', 'Hazza
 const BLINK_LAMP_SECTIONS = new Set(['front', 'rear']);
 let currentCycleState = 0;
 
+// Sequential DEMO state: while sequentialDemoActive is true, exactly ONE pair
+// is "active" (blinking + enlarged) at a time — activeBlinkPair holds its key.
+// Pairs not yet reached show as normal pending; completed pairs as normal ✓.
+// Outside the sequential DEMO (real backend / other mocks) these stay default
+// and the original "any pending special lamp blinks" behavior is used.
+let activeBlinkPair = null;
+let sequentialDemoActive = false;
+
 // Fixed row order so rows never jump when their status changes — rendering
 // iterates these arrays instead of sorting by status. Any incoming key not
 // listed here is appended after, in its original JSON order.
 const FRONT_LAMP_ORDER = [
-    'Hazzard', 'Left Turn Signal', 'Right Turn Signal',
+    'Left Turn Signal', 'Right Turn Signal', 'Hazzard',
     'DRL', 'Head High Beam', 'Head Low Beam', 'Parking'
 ];
 const REAR_LAMP_ORDER = [
-    'Hazzard', 'Left Turn Signal', 'Right Turn Signal',
+    'Left Turn Signal', 'Right Turn Signal', 'Hazzard',
     'Brake', 'License', 'Parking', 'Reverse', 'Fog'
 ];
 // Parts have no canonical list — capture key order from the first JSON load
@@ -113,7 +121,16 @@ function getRowOrder(sectionName, type, sectionData) {
         const extras = keys.filter(k => !fixed.includes(k));
         return [...present, ...extras];
     }
-    // Parts: lock in the key order on first sight of this section.
+    // Parts: use the matched-pairs-first ordered list (matched pairs aligned at
+    // the same index in left & right, standalones below) — locked at init.
+    const fixedParts = sectionName === 'left' ? PARTS_ORDER_LEFT
+        : sectionName === 'right' ? PARTS_ORDER_RIGHT : null;
+    if (fixedParts) {
+        const present = fixedParts.filter(k => k in sectionData);
+        const extras = keys.filter(k => !fixedParts.includes(k));
+        return [...present, ...extras];
+    }
+    // Fallback: lock in the key order on first sight of this section.
     if (!partsKeyOrder[sectionName]) {
         partsKeyOrder[sectionName] = keys.slice();
     }
@@ -122,11 +139,82 @@ function getRowOrder(sectionName, type, sectionData) {
     return [...locked.filter(k => k in sectionData), ...extras];
 }
 
-// When BOTH sides of a pair are ticked, hold the completed (green + enlarged)
-// look for this long before reverting to normal, so the pair visibly finishes
-// together. Keyed by lamp type, storing the timestamp the hold expires.
+// ───────────────────────── FOUR-STAGE PAIR LIFECYCLE ─────────────────────────
+// The three synchronized front/rear pairs (Left Turn → Right Turn → Hazzard)
+// each walk through four stages, processed strictly one pair at a time:
+//   1 WAITING     — blinking red ✗, normal size (pair not started yet)
+//   2 PROCESSING  — blinking green dot + 2× text + breathing (pair under test)
+//   3 DELAY       — identical visuals to stage 2 but ✓ still WITHHELD, held for
+//                   PAIR_HOLD_MS after BOTH sides are detected
+//   4 DONE        — static green ✓, normal size (final resting state)
+// Stages are DERIVED from the live data (front/rear pass values) by
+// computePairStages(); only the pair currently under test is in stage 2/3, all
+// earlier pairs are in stage 4 and all later pairs in stage 1.
+const PAIR_SEQUENCE = ['Left Turn Signal', 'Right Turn Signal', 'Hazzard'];
+
+// Stage-3 hold: once both sides of a pair are detected, hold the processing
+// visuals (✓ withheld) this long before snapping to stage 4. Keyed by lamp
+// type, storing the timestamp the hold expires.
 const PAIR_HOLD_MS = 1500;
 let pairHoldUntil = {};
+
+// Last computed stage per pair key (1..4), recomputed each render in demo mode.
+let currentPairStages = {};
+
+function lampValue(section, key) {
+    return cachedApiData && cachedApiData[section] ? cachedApiData[section][key] : undefined;
+}
+// 1 = pass, 3 = dim/partial also counts as a pass for these lamps.
+function isLampPass(v) { return v === 1 || v === 3; }
+function pairBothPass(key) {
+    return isLampPass(lampValue('front', key)) && isLampPass(lampValue('rear', key));
+}
+
+// Global waiting-blink gate: a row showing a red ✗ (value 0) is "waiting"
+// (blinking) rather than "failed" (static) while the dashboard is awaiting an
+// inspection (idle, cycle_state 0) OR the sequential DEMO is actively
+// processing rows. A static result snapshot (mock fail/pass, or a real
+// in-progress snapshot) shows decided statuses without the waiting blink.
+function isInspectionPending() {
+    return sequentialDemoActive || currentCycleState === 0;
+}
+
+// Walk the three pairs in order and assign each a stage 1..4. The first pair
+// that is not yet fully done "blocks" the sequence: it is the active pair
+// (stage 2, or stage 3 while inside its completion-delay hold) and every pair
+// after it stays in stage 1 (waiting). Pairs before it are stage 4 (done).
+function computePairStages() {
+    const now = Date.now();
+    const cycleActive = currentCycleState > 0;
+    const stages = {};
+    let blocked = false;
+    for (const key of PAIR_SEQUENCE) {
+        if (blocked || !cycleActive) {
+            stages[key] = 1;            // waiting (blink red)
+            if (!cycleActive) delete pairHoldUntil[key];
+            continue;
+        }
+        if (pairBothPass(key)) {
+            if (pairHoldUntil[key] === undefined) {
+                // Both sides just detected — start the stage-3 hold and schedule
+                // one re-render at its end so this pair snaps to stage 4 and the
+                // next pair advances to stage 2, all in the same frame.
+                pairHoldUntil[key] = now + PAIR_HOLD_MS;
+                setTimeout(() => { currentStructure = null; updateCheckboxes(); }, PAIR_HOLD_MS + 50);
+            }
+            if (now < pairHoldUntil[key]) {
+                stages[key] = 3;        // completion delay, ✓ withheld, still active
+                blocked = true;
+            } else {
+                stages[key] = 4;        // done — let the next pair proceed
+            }
+        } else {
+            stages[key] = 2;            // processing (active pair)
+            blocked = true;
+        }
+    }
+    return stages;
+}
 
 // Single shared blink ticker. Toggling one class on <body> flips EVERY
 // blinking lamp in the same tick, so each front/rear pair stays perfectly in
@@ -161,6 +249,50 @@ const RIGHT_PARTS_NAMES = [
     "Right Front Wheel Nut", "Right Pillar Garnish", "Right Rear Door Handle",
     "Right Rear Wheel Hub Cap"
 ];
+
+// Parts-matching for the DEMO: a left and right part are the SAME component on
+// opposite sides if their names match after stripping the leading "Left "/
+// "Right ". (Front/Rear are NOT stripped, so they stay separate parts.)
+function getMatchKey(name) {
+    return name.replace(/^(Left|Right)\s+/i, '').trim();
+}
+
+// Reorder both parts lists ONCE so matched left/right pairs sit at the TOP,
+// aligned at the SAME index in both lists (orderedLeft[i] ↔ orderedRight[i]),
+// with standalone parts below. matchedCount marks where pairs end.
+function buildOrderedPartsLists(leftParts, rightParts) {
+    const rightByKey = {};
+    rightParts.forEach(n => { rightByKey[getMatchKey(n)] = n; });
+
+    const matchedLeft = [];
+    const matchedRight = [];
+    const usedRight = new Set();
+
+    // Pass 1: matched pairs in original-left order (kept index-aligned).
+    leftParts.forEach(leftName => {
+        const key = getMatchKey(leftName);
+        if (rightByKey[key]) {
+            matchedLeft.push(leftName);
+            matchedRight.push(rightByKey[key]);
+            usedRight.add(rightByKey[key]);
+        }
+    });
+
+    // Pass 2: standalones (no counterpart on the other side).
+    const standaloneLeft = leftParts.filter(n => !rightByKey[getMatchKey(n)]);
+    const standaloneRight = rightParts.filter(n => !usedRight.has(n));
+
+    return {
+        orderedLeft: [...matchedLeft, ...standaloneLeft],
+        orderedRight: [...matchedRight, ...standaloneRight],
+        matchedCount: matchedLeft.length
+    };
+}
+
+// Built once at init (DO NOT TOUCH API structure — this is purely demo order).
+// Used both as the fixed render order (getRowOrder) and the processing order.
+const { orderedLeft: PARTS_ORDER_LEFT, orderedRight: PARTS_ORDER_RIGHT, matchedCount: PARTS_MATCHED_COUNT } =
+    buildOrderedPartsLists(LEFT_PARTS_NAMES, RIGHT_PARTS_NAMES);
 
 // Build a { partName: stateValue } map from a name list, where stateValue is
 // produced per-index by valueFn. Part states: 0 missing (red), 1 present (blue),
@@ -232,6 +364,10 @@ function clearMockSequence() {
     }
     mockSequenceTimeouts.forEach(clearTimeout);
     mockSequenceTimeouts = [];
+    // Leave sequential-demo mode so other mocks / the real backend fall back to
+    // the default blink behavior.
+    activeBlinkPair = null;
+    sequentialDemoActive = false;
 }
 
 function shuffleArray(arr) {
@@ -298,67 +434,74 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     container.innerHTML = '';
 
     items.forEach(([key, value]) => {
-        // Blink-green pending state for the 6 whitelisted lamps in front/rear sections.
-        // Other lamps and all parts go through unmodified logic.
-        let blinkLampClass = null;
-        let enlargePair = false;
-        // The 3 synchronized lamp types (Left/Right Turn Signal, Hazzard) in
-        // front/rear. While pending they blink (via the shared
-        // body.blink-off-phase ticker). The 2x font stays on BOTH rows of the
-        // pair until BOTH the front and rear sides are ticked ✓ — so a side
-        // that ticks first stays enlarged (but stops blinking) until its
-        // partner also ticks.
+        // The 3 synchronized lamp types (Left/Right Turn Signal, Hazzard) in the
+        // front/rear sections get the four-stage lifecycle. Everything else
+        // (other lamps, all parts) goes through the unmodified logic below.
         const isBlinkPairLamp = type === 'lamps'
             && BLINK_LAMP_SECTIONS.has(sectionName)
             && BLINK_LAMP_KEYS.has(key);
-        if (isBlinkPairLamp) {
-            // Look up the partner row (same key in the opposite section).
-            const partnerSection = sectionName === 'front' ? 'rear' : 'front';
-            const partnerVal = cachedApiData && cachedApiData[partnerSection]
-                ? cachedApiData[partnerSection][key]
-                : undefined;
-            const isTicked = (v) => v === 1 || v === 3; // 3 (dim) counts as pass
-            const bothTicked = isTicked(value) && isTicked(partnerVal);
-
-            if (currentCycleState > 0) {
-                if (!bothTicked) {
-                    // Pair not complete — keep 2x font on both rows; clear any
-                    // stale hold so a re-opened pair behaves correctly.
-                    enlargePair = true;
-                    delete pairHoldUntil[key];
-                } else {
-                    // Both sides ✓ — start a short hold so the completed pair
-                    // stays green + enlarged briefly, then reverts together.
-                    if (pairHoldUntil[key] === undefined) {
-                        pairHoldUntil[key] = Date.now() + PAIR_HOLD_MS;
-                        // Trigger one rebuild after the hold so both rows revert
-                        // to normal in the same frame.
-                        setTimeout(() => {
-                            currentStructure = null;
-                            updateCheckboxes();
-                        }, PAIR_HOLD_MS + 50);
-                    }
-                    if (Date.now() < pairHoldUntil[key]) {
-                        enlargePair = true;
-                    }
-                }
-            }
-            // Blink only while THIS row is still pending.
-            if (value === 0 && currentCycleState > 0) {
-                blinkLampClass = 'lamp-state-blink-green';
-            } else if (value === 3) {
-                value = 1; // dim/partial counts as a pass for these lamps
-            }
-        }
 
         // Sanitize key for use in ID attribute (alphanumeric, hyphens, underscores only)
         const sanitizedKey = key.replace(/[^a-zA-Z0-9_-]/g, '-');
         const checkboxId = `${type}-${sectionName}-${sanitizedKey}`;
         const label = toTitleCase(key);
 
+        // ───── Four-stage pair rows ─────
+        // A value of 2 (N/A) is rendered with the normal grey indicator below;
+        // every other state is driven purely by the pair's stage so that the ✓
+        // can be withheld during the completion delay (stage 3).
+        if (isBlinkPairLamp && value !== 2) {
+            let stage;
+            if (sequentialDemoActive) {
+                // Sequencer is running — stage is derived for the whole sequence.
+                stage = currentPairStages[key] || 1;
+            } else {
+                // Real backend / static mocks: show the truthful per-row status —
+                // static green ✓ once this side passes, otherwise a blinking
+                // red ✗ (stage 1). No green/breathing without a live sequencer.
+                stage = isLampPass(value) ? 4 : 1;
+            }
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'checklist-item lamp-pair-row';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = checkboxId;
+            checkbox.className = 'checkbox';
+            checkbox.checked = (stage === 4); // ✓ shown ONLY in the done stage
+
+            if (stage === 1) {
+                // Waiting — global blinking red ✗ (in unison with every other panel).
+                itemDiv.classList.add('stage-waiting', 'is-waiting');
+            } else if (stage === 2 || stage === 3) {
+                // Identical visuals for stages 2 and 3 (✓ withheld in both):
+                // blinking green dot + 2× text + breathing label.
+                itemDiv.classList.add('stage-processing', 'lamp-state-blink-green', 'lamp-pair-enlarged');
+            } else {
+                itemDiv.classList.add('stage-done');
+            }
+
+            const labelEl = document.createElement('label');
+            labelEl.htmlFor = checkboxId;
+            labelEl.textContent = label;
+
+            itemDiv.appendChild(checkbox);
+            itemDiv.appendChild(labelEl);
+            container.appendChild(itemDiv);
+            return; // handled — skip the generic lamp/parts rendering below
+        }
+
         // Create elements safely using DOM methods to prevent XSS
         const itemDiv = document.createElement('div');
         itemDiv.className = 'checklist-item';
+
+        // Global waiting blink: any not-yet-decided row (red ✗, value 0) blinks
+        // in unison while the inspection is pending. A decided 0 (real fail
+        // snapshot) stays static so it reads as FAILED, not waiting.
+        if (value === 0 && isInspectionPending()) {
+            itemDiv.classList.add('is-waiting');
+        }
 
         if (type === 'parts') {
             // Parts have 4 states: fail (0), pass (1), n/a (2), warning (3)
@@ -408,8 +551,6 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
             }
         }
 
-        if (enlargePair) itemDiv.classList.add('lamp-pair-enlarged');
-        if (blinkLampClass) itemDiv.classList.add(blinkLampClass);
         container.appendChild(itemDiv);
     });
 }
@@ -534,6 +675,20 @@ function getFailedLamps() {
 }
 
 // Show status popover
+// Fill the overlay's table-like sub-data block (VIN / BOOTH / TIME).
+function updatePopoverMeta() {
+    const meta = document.getElementById('popover-meta');
+    if (!meta) return;
+    const booth = Object.keys(BOOTH_PORTS).find(k => BOOTH_PORTS[k] === currentPort) || '1';
+    const vin = (currentVin && currentVin !== '--') ? currentVin : '—';
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    const ts = `${p(d.getMonth() + 1)}/${p(d.getDate())}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    const card = (label, value, mono) =>
+        `<div class="popover-meta-item"><span class="popover-meta-label">${label}</span><span class="popover-meta-value${mono ? ' mono' : ''}">${value}</span></div>`;
+    meta.innerHTML = card('VIN', vin, true) + card('Booth', booth, false) + card('Time', ts, true);
+}
+
 function showStatusPopover(status) {
     console.log('[POPOVER] showStatusPopover called with status:', status);
 
@@ -557,15 +712,18 @@ function showStatusPopover(status) {
 
     let duration = 5; // Default 5s
 
+    // Terminal-style status report: fill the VIN / BOOTH / TIME table block.
+    updatePopoverMeta();
+
     if (status === 0) {
         popoverIcon.classList.add('success');
         popoverText.classList.add('success');
-        popoverText.textContent = 'PASSED';
+        popoverText.textContent = 'INSPECTION PASSED';
         if (failedLampsContainer) failedLampsContainer.style.display = 'none';
     } else if (status === 1) {
         popoverIcon.classList.add('failure');
         popoverText.classList.add('failure');
-        popoverText.textContent = 'FAILED';
+        popoverText.textContent = 'INSPECTION FAILED';
         updatePopoverFailedLamps(false);
     } else if (status === 3) {
         popoverIcon.classList.add('warning');
@@ -714,57 +872,143 @@ function hidePassBanner() {
     if (banner) banner.classList.remove('show');
 }
 
-// DEMO sequence: the 3 lamp pairs (Left Turn, Right Turn, Hazzard) blink green,
-// then each PAIR passes — front + rear ticked together so the two ✓ marks
-// appear simultaneously — in random order (1.5–2.5s between pairs). Each
-// completed pair holds its green/enlarged look briefly, then reverts. After
-// all pairs pass, the full-screen PASS popup shows.
+// DEMO sequence: TWO concurrent tracks start together on click.
+//   Track A (lamps): 3 special pairs strictly sequential (blink→tick→shrink),
+//     then the non-special lamps pass one-by-one (no blink, no font change).
+//   Track B (parts): name-matched left/right pairs (and standalone singles)
+//     turn green one entry at a time (no blink, no font change).
+// The PASS popup only fires 1s after BOTH tracks finish.
 function triggerDemo() {
-    console.log('[DEMO] Starting demo sequence');
+    console.log('[DEMO] Starting concurrent demo (Track A lamps + Track B parts)');
     clearMockSequence();
     hidePassBanner();
 
-    // Car enters: cycle active so the 6 whitelisted lamps blink green,
-    // every other lamp renders at its normal state.
+    // Enter sequential mode BEFORE the first render so no pending pair blinks
+    // until it is explicitly activated.
+    sequentialDemoActive = true;
+    activeBlinkPair = null;
+
+    // Car enters: cycle active.
     applyMockState('cycleActive');
     lastOverallStatus = 2;
     closeStatusPopover();
     updateCycleStatusBanner(2);
 
-    const pairs = shuffleArray([...BLINK_LAMP_KEYS]);
-    let cumulativeDelay = 0;
-    let passedCount = 0;
+    // Reset all parts to pending(0) so Track B visibly processes them from red;
+    // each part is then marked GREEN (✓) as its turn comes up.
+    ['left_side_parts', 'right_side_parts'].forEach(sec => {
+        const s = cachedApiData && cachedApiData[sec];
+        if (!s) return;
+        for (const k in s) { s[k] = 0; }
+    });
+    ['front', 'rear'].forEach(section => {
+        const s = cachedApiData && cachedApiData[section];
+        if (!s) return;
+        for (const k in s) { if (s[k] !== 2) s[k] = 0; } // keep N/A (e.g. Fog) as-is
+    });
+    currentStructure = null;
+    updateCheckboxes();
 
-    pairs.forEach((key) => {
-        const stepDelay = 1500 + Math.random() * 1000; // 1.5–2.5s per pair
-        cumulativeDelay += stepDelay;
+    // PASS popup waits for BOTH tracks. Each track flips its flag when done.
+    let trackADone = false, trackBDone = false;
+    const checkAllComplete = () => {
+        if (!(trackADone && trackBDone)) return;
+        const id = setTimeout(() => {
+            sequentialDemoActive = false;
+            activeBlinkPair = null;
+            console.log('[DEMO] Both tracks complete → PASS');
+            handleStatusChange(0);
+        }, 1000);
+        mockSequenceTimeouts.push(id);
+    };
 
-        const tid = setTimeout(() => {
-            if (!cachedApiData || !cachedApiData.front || !cachedApiData.rear) return;
+    // Each track gets its own INDEPENDENT timeline (both anchored at t=0) so the
+    // two run concurrently; every step is cancellable via mockSequenceTimeouts.
+    const makeTimeline = () => {
+        let t = 0;
+        return (delay, fn) => { t += delay; const id = setTimeout(fn, t); mockSequenceTimeouts.push(id); return t; };
+    };
 
-            // Tick BOTH sides of the pair in the same frame → simultaneous ✓.
-            cachedApiData.front[key] = 1;
-            cachedApiData.rear[key] = 1;
-            console.log(`${key} passed (front + rear)`);
+    // ─────────────── TRACK A — LAMPS (sequential within track) ───────────────
+    const atA = makeTimeline();
+    const PAIR_ORDER = ['Left Turn Signal', 'Right Turn Signal', 'Hazzard'];
+    const BLINK_MS = 2200;            // blink duration before the pair ticks ✓
+    const HOLD_MS = PAIR_HOLD_MS;     // keep ✓ + 2x visible, then shrink back
+    const GAP_MS = 400;               // brief gap before a pair activates
 
+    PAIR_ORDER.forEach((key) => {
+        // Activate → front + rear blink green together (larger font).
+        atA(GAP_MS, () => {
+            activeBlinkPair = key;
             currentStructure = null;
             updateCheckboxes();
-
-            passedCount++;
-            if (passedCount === pairs.length) {
-                console.log('[DEMO] All pairs passed');
-                // Wait 3s after the final pair completes before showing the
-                // PASS popup (the last pair's ~1.5s hold finishes within this).
-                const passDelay = 3000;
-                const passTid = setTimeout(() => handleStatusChange(0), passDelay);
-                mockSequenceTimeouts.push(passTid);
-            }
-        }, cumulativeDelay);
-
-        mockSequenceTimeouts.push(tid);
+            console.log(`[DEMO/A] ${key} blinking (front + rear)`);
+        });
+        // Tick BOTH sides in the same frame → simultaneous ✓ (stays enlarged).
+        atA(BLINK_MS, () => {
+            if (!cachedApiData || !cachedApiData.front || !cachedApiData.rear) return;
+            cachedApiData.front[key] = 1;
+            cachedApiData.rear[key] = 1;
+            currentStructure = null;
+            updateCheckboxes();
+            console.log(`[DEMO/A] ${key} passed (front + rear)`);
+        });
+        // Hold, then deactivate → pair shrinks to normal ✓ and the NEXT begins.
+        atA(HOLD_MS, () => {
+            activeBlinkPair = null;
+            currentStructure = null;
+            updateCheckboxes();
+        });
     });
 
-    console.log(`[DEMO] Scheduled ${pairs.length} pairs over ~${(cumulativeDelay / 1000).toFixed(1)}s`);
+    // Step 4: non-special lamps pass one-by-one ~500ms apart (no blink/font).
+    const otherLamps = [];
+    [['front', FRONT_LAMP_ORDER], ['rear', REAR_LAMP_ORDER]].forEach(([section, order]) => {
+        const s = cachedApiData && cachedApiData[section];
+        if (!s) return;
+        order.forEach(name => {
+            if (BLINK_LAMP_KEYS.has(name)) return;     // specials handled above
+            if (s[name] === 0) otherLamps.push({ section, name }); // skip N/A / missing
+        });
+    });
+    otherLamps.forEach(({ section, name }) => {
+        atA(500, () => {
+            cachedApiData[section][name] = 1;
+            currentStructure = null;
+            updateCheckboxes();
+            console.log(`[DEMO/A] ${section}.${name} passed`);
+        });
+    });
+    atA(300, () => { trackADone = true; console.log('[DEMO/A] Track A done'); checkAllComplete(); });
+
+    // ─────────────── TRACK B — PARTS (reordered: matched pairs first) ───────────────
+    const atB = makeTimeline();
+    const markLeft = (name) => { if (cachedApiData.left_side_parts) cachedApiData.left_side_parts[name] = 1; };  // green ✓
+    const markRight = (name) => { if (cachedApiData.right_side_parts) cachedApiData.right_side_parts[name] = 1; }; // green ✓
+
+    // Matched pairs first (top of both lists), one pair every ~400ms — left and
+    // right of each pair turn green in the SAME frame.
+    for (let i = 0; i < PARTS_MATCHED_COUNT; i++) {
+        const left = PARTS_ORDER_LEFT[i], right = PARTS_ORDER_RIGHT[i];
+        atB(400, () => {
+            markLeft(left); markRight(right);
+            currentStructure = null; updateCheckboxes();
+            console.log(`[DEMO/B] pair: ${left} + ${right}`);
+        });
+    }
+    // Then left-only standalones, one every ~300ms.
+    for (let i = PARTS_MATCHED_COUNT; i < PARTS_ORDER_LEFT.length; i++) {
+        const left = PARTS_ORDER_LEFT[i];
+        atB(300, () => { markLeft(left); currentStructure = null; updateCheckboxes(); console.log(`[DEMO/B] single L: ${left}`); });
+    }
+    // Then right-only standalones, one every ~300ms.
+    for (let i = PARTS_MATCHED_COUNT; i < PARTS_ORDER_RIGHT.length; i++) {
+        const right = PARTS_ORDER_RIGHT[i];
+        atB(300, () => { markRight(right); currentStructure = null; updateCheckboxes(); console.log(`[DEMO/B] single R: ${right}`); });
+    }
+    atB(300, () => { trackBDone = true; console.log('[DEMO/B] Track B done'); checkAllComplete(); });
+
+    console.log(`[DEMO] Track A (${PAIR_ORDER.length} pairs + ${otherLamps.length} lamps) and Track B (${PARTS_MATCHED_COUNT} part pairs + standalones) running concurrently`);
 }
 
 // Mock test functionality for local testing
@@ -1126,6 +1370,16 @@ function updateCheckboxes() {
         if (currentStructure === newStructure) return;
         currentStructure = newStructure;
 
+        // Recompute the four-stage lifecycle for the three synchronized pairs.
+        // Only meaningful while the sequencer (DEMO) is running; otherwise rows
+        // fall back to truthful per-row status and no holds are tracked.
+        if (sequentialDemoActive) {
+            currentPairStages = computePairStages();
+        } else {
+            currentPairStages = {};
+            pairHoldUntil = {};
+        }
+
         // Map API data to new sections (lamps top, parts bottom)
         const { frontLamps, rearLamps, leftParts, rightParts } = mapApiDataToSections(cachedApiData);
 
@@ -1165,11 +1419,29 @@ async function loadLiveVideos() {
         // 3. Define the quadrants we want to display
         const quadrants = ['front', 'rear', 'left', 'right'];
         const streamUrl = getLiveVideoUrl();
+        // Original-style view labels (with spaces) for the placeholder.
+        const VIEW_LABELS = { front: 'FRONT VIEW', rear: 'REAR VIEW', left: 'LEFT SIDE', right: 'RIGHT SIDE' };
 
         // 4. Create 4 quadrants
         quadrants.forEach(quad => {
             const quadContainer = document.createElement('div');
             quadContainer.className = `quadrant-container quad-${quad}`;
+
+            // Camera placeholder (original look): dark tile, centered view label,
+            // red ● LIVE pill top-right, timestamp bottom-left.
+            const placeholder = document.createElement('div');
+            placeholder.className = 'camera-placeholder';
+            placeholder.innerHTML = `
+                <span class="cam-live"><span class="cam-live-dot"></span>LIVE</span>
+                <div class="cam-center">
+                    <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span class="cam-label">${VIEW_LABELS[quad] || quad.toUpperCase()}</span>
+                </div>
+                <span class="cam-timestamp">--/--/---- --:--:--</span>`;
+            quadContainer.appendChild(placeholder);
 
             // Set CSS variables for cropping
             if (config[quad]) {
@@ -1241,6 +1513,21 @@ async function loadLiveVideos() {
 }
 
 // Booth selector event handler
+// Tick the camera placeholder timestamps once a second (presentational only).
+let cameraClockStarted = false;
+function startCameraClock() {
+    if (cameraClockStarted) return;
+    cameraClockStarted = true;
+    const p = (n) => String(n).padStart(2, '0');
+    const tick = () => {
+        const d = new Date();
+        const stamp = `${p(d.getMonth() + 1)}/${p(d.getDate())}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        document.querySelectorAll('.cam-timestamp').forEach(el => { el.textContent = stamp; });
+    };
+    tick();
+    setInterval(tick, 1000);
+}
+
 function handleBoothChange(port, updateUrl = true) {
     currentPort = parseInt(port);
     console.log(`Switched to Booth on port ${currentPort}`);
@@ -1335,6 +1622,9 @@ loadLiveVideos();
 
 // Start the single shared blink ticker (drives all synchronized lamp blinks)
 startBlinkTicker();
+
+// Start the camera placeholder timestamp clock
+startCameraClock();
 
 // In mock mode, seed the dashboard with the idle state so the lamp cards
 // render immediately (instead of showing empty placeholders when the
