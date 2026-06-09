@@ -20,7 +20,8 @@ if not os.path.exists(RECORDINGS_DIR):
 BOOTH_PORTS = {
     1: 5000,
     2: 5005,
-    3: 5010
+    3: 5010,
+    4: 5555
 }
 
 def record_stream(booth_id, duration=10):
@@ -43,7 +44,54 @@ def record_stream(booth_id, duration=10):
     except Exception as e:
         print(f"Recording error: {e}")
 
+# Socket errors raised when the browser aborts an in-flight request
+# (reloads, navigations, resetting img.src on the video streams, polling
+# overlap). These are expected and harmless — swallow them instead of
+# letting the stock handler dump a traceback to the terminal.
+CLIENT_DISCONNECT_ERRORS = (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)
+
+
 class SPAHandler(http.server.SimpleHTTPRequestHandler):
+    def handle_one_request(self):
+        # Wrap each request so a mid-flight client disconnect doesn't surface
+        # as "socket connection was closed unexpectedly".
+        try:
+            super().handle_one_request()
+        except CLIENT_DISCONNECT_ERRORS:
+            self.close_connection = True
+
+    def finish(self):
+        try:
+            super().finish()
+        except CLIENT_DISCONNECT_ERRORS:
+            pass
+
+    def log_error(self, format, *args):
+        # Suppress the noisy socket-teardown error lines; keep real logging.
+        pass
+
+    def end_headers(self):
+        # Dev server: never let the browser cache static assets, otherwise an
+        # edited script.js/styles.css keeps serving stale and changes "don't
+        # show up" without a manual hard-refresh.
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
+    def _send_json(self, payload, status=200):
+        """Send a JSON body with Content-Length, tolerating a closed socket."""
+        try:
+            body = json.dumps(payload).encode()
+            self.send_response(status)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except CLIENT_DISCONNECT_ERRORS:
+            # Client went away before we finished — nothing to do.
+            self.close_connection = True
+
     def do_GET(self):
         parsed_path = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed_path.query)
@@ -53,20 +101,16 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         if path == '/config':
             booth_id = query.get('booth', ['1'])[0]
             section = f'booth_{booth_id}'
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
+
             config = configparser.ConfigParser()
             config.read(CONFIG_FILE)
-            
+
             res = {}
             if section in config:
                 for key in config[section]:
                     res[key] = [float(x.strip()) for x in config[section][key].split(',')]
-            
-            self.wfile.write(json.dumps(res).encode())
+
+            self._send_json(res)
             return
 
         # API: Record raw stream
@@ -75,11 +119,8 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             # Run recording in a separate thread to not block the server
             thread = threading.Thread(target=record_stream, args=(booth_id,))
             thread.start()
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'recording_started', 'booth': booth_id}).encode())
+
+            self._send_json({'status': 'recording_started', 'booth': booth_id})
             return
 
         # Redirect /adjust_vid to adjust.html
@@ -124,15 +165,25 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
                 
             with open(CONFIG_FILE, 'w') as f:
                 config.write(f)
-                
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'success', 'booth': booth_id}).encode())
+
+            self._send_json({'status': 'success', 'booth': booth_id})
             return
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-with socketserver.TCPServer(("", PORT), SPAHandler) as httpd:
-    print(f"Server running at http://localhost:{PORT}")
-    httpd.serve_forever()
+
+class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    """Handle each request in its own thread so a single hung or aborted
+    client connection never blocks the dashboard's other requests."""
+    daemon_threads = True       # don't keep the process alive for stuck threads
+    allow_reuse_address = True  # avoid 'address already in use' on quick restarts
+
+
+if __name__ == '__main__':
+    with ThreadingHTTPServer(("", PORT), SPAHandler) as httpd:
+        print(f"Server running at http://localhost:{PORT}")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down server.")
+            httpd.shutdown()

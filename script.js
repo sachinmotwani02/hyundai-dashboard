@@ -1,6 +1,21 @@
 // API Configuration
 let currentPort = 5000; // Default port (Booth 1)
 const POLL_INTERVAL = 1000; // Poll every 1 second
+const FETCH_TIMEOUT = 4000; // Abort a single request after 4s so hung sockets don't pile up
+const MAX_BACKOFF = 10000;  // Cap the reconnect backoff at 10s
+
+// fetch() wrapper that aborts after FETCH_TIMEOUT, so a dropped/half-open
+// socket can't leave a request hanging forever (which is what surfaces as
+// "the socket connection was closed unexpectedly").
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 // Booth to port mapping
 const BOOTH_PORTS = {
@@ -63,6 +78,171 @@ function toTitleCase(str) {
 // Store current checkboxes structure
 let currentStructure = null;
 
+// Blink-green pending behavior: 3 lamp keys in front/rear only.
+// When cycle_state > 0 and the lamp value is 0, show a pulsing green
+// (test-in-progress) instead of the default red-fail indicator.
+const BLINK_LAMP_KEYS = new Set(['Left Turn Signal', 'Right Turn Signal', 'Hazzard']);
+const BLINK_LAMP_SECTIONS = new Set(['front', 'rear']);
+let currentCycleState = 0;
+
+// Fixed row order so rows never jump when their status changes — rendering
+// iterates these arrays instead of sorting by status. Any incoming key not
+// listed here is appended after, in its original JSON order.
+const FRONT_LAMP_ORDER = [
+    'Hazzard', 'Left Turn Signal', 'Right Turn Signal',
+    'DRL', 'Head High Beam', 'Head Low Beam', 'Parking'
+];
+const REAR_LAMP_ORDER = [
+    'Hazzard', 'Left Turn Signal', 'Right Turn Signal',
+    'Brake', 'License', 'Parking', 'Reverse', 'Fog'
+];
+// Parts have no canonical list — capture key order from the first JSON load
+// once (per section) and reuse it forever so parts rows also stay put.
+const partsKeyOrder = {};
+
+// Return the rendering order of keys for a section: a fixed array for lamps,
+// or the first-seen key order for parts. Keeps row positions stable.
+function getRowOrder(sectionName, type, sectionData) {
+    const keys = Object.keys(sectionData);
+    if (type === 'lamps') {
+        const fixed = sectionName === 'front' ? FRONT_LAMP_ORDER
+            : sectionName === 'rear' ? REAR_LAMP_ORDER : null;
+        if (!fixed) return keys;
+        // Listed keys first (in fixed order), then any unlisted keys appended.
+        const present = fixed.filter(k => k in sectionData);
+        const extras = keys.filter(k => !fixed.includes(k));
+        return [...present, ...extras];
+    }
+    // Parts: lock in the key order on first sight of this section.
+    if (!partsKeyOrder[sectionName]) {
+        partsKeyOrder[sectionName] = keys.slice();
+    }
+    const locked = partsKeyOrder[sectionName];
+    const extras = keys.filter(k => !locked.includes(k));
+    return [...locked.filter(k => k in sectionData), ...extras];
+}
+
+// When BOTH sides of a pair are ticked, hold the completed (green + enlarged)
+// look for this long before reverting to normal, so the pair visibly finishes
+// together. Keyed by lamp type, storing the timestamp the hold expires.
+const PAIR_HOLD_MS = 1500;
+let pairHoldUntil = {};
+
+// Single shared blink ticker. Toggling one class on <body> flips EVERY
+// blinking lamp in the same tick, so each front/rear pair stays perfectly in
+// sync — no per-element timers or animations that could drift apart.
+const BLINK_HALF_CYCLE = 500; // ms (1s full on/off cycle)
+let blinkTicker = null;
+
+function startBlinkTicker() {
+    if (blinkTicker) return; // single timer only
+    blinkTicker = setInterval(() => {
+        document.body.classList.toggle('blink-off-phase');
+    }, BLINK_HALF_CYCLE);
+}
+
+// Mock states mirror the sample JSON files in the project folder.
+// Used by the MOCK buttons so the dashboard can be demoed without a backend.
+// Canonical part-name lists for the PARTS LEFT / PARTS RIGHT panels.
+// Edit these arrays to change which parts appear. NOTE: in production the
+// real /light_status backend must return matching keys under
+// left_side_parts / right_side_parts — these arrays only drive the demo.
+const LEFT_PARTS_NAMES = [
+    "Bumper Grill", "Front License Plate", "Left Bumper Molding", "Left Fender Molding",
+    "Left Front Wheel Hub Cap", "Left Driver Mirror", "Left Rear Bumper Molding",
+    "Left Rear Wheel", "Front Bumper Skid", "Hyundai Logo Front", "Left Door Handle",
+    "Left Front Wheel Nut", "Left Pillar Garnish", "Left Rear Door Handle",
+    "Left Rear Wheel Hub Cap"
+];
+const RIGHT_PARTS_NAMES = [
+    "Antenna", "Rear Hyundai Logo", "Right Door Handle", "Right Fender Molding",
+    "Right Front Wheel Hub Cap", "Right Driver Mirror", "Right Rear Bumper Molding",
+    "Right Rear Wheel", "Rear Bumper Skid", "Right Bumper Molding", "Right Fender Emblem",
+    "Right Front Wheel Nut", "Right Pillar Garnish", "Right Rear Door Handle",
+    "Right Rear Wheel Hub Cap"
+];
+
+// Build a { partName: stateValue } map from a name list, where stateValue is
+// produced per-index by valueFn. Part states: 0 missing (red), 1 present (blue),
+// 2 N/A (grey), 3 mismatch (yellow).
+function buildPartsState(names, valueFn) {
+    const out = {};
+    names.forEach((name, i) => { out[name] = valueFn(i); });
+    return out;
+}
+
+const MOCK_STATES = {
+    idle: {
+        cycle_state: 0, vin: "",
+        front: { "DRL": 0, "Hazzard": 0, "Head High Beam": 0, "Head Low Beam": 0, "Left Turn Signal": 0, "Parking": 0, "Right Turn Signal": 0 },
+        rear: { "Fog": 0, "Hazzard": 0, "Left Turn Signal": 0, "License": 0, "Parking": 0, "Reverse": 0, "Right Turn Signal": 0 },
+        left_side_parts: buildPartsState(LEFT_PARTS_NAMES, () => 0),
+        right_side_parts: buildPartsState(RIGHT_PARTS_NAMES, () => 0)
+    },
+    cycleActive: {
+        cycle_state: 2, vin: "HQW247823",
+        front: { "DRL": 1, "Hazzard": 0, "Head High Beam": 0, "Head Low Beam": 1, "Left Turn Signal": 0, "Parking": 1, "Right Turn Signal": 0 },
+        rear: { "Fog": 2, "Hazzard": 0, "Left Turn Signal": 0, "License": 1, "Parking": 1, "Reverse": 1, "Right Turn Signal": 0 },
+        left_side_parts: buildPartsState(LEFT_PARTS_NAMES, i => (i % 5 === 0 ? 0 : i % 5 === 3 ? 2 : 1)),
+        right_side_parts: buildPartsState(RIGHT_PARTS_NAMES, i => (i % 5 === 1 ? 0 : i % 5 === 4 ? 3 : 1))
+    },
+    allPassed: {
+        cycle_state: 2, vin: "HQW247823",
+        front: { "DRL": 1, "Hazzard": 1, "Head High Beam": 1, "Head Low Beam": 1, "Left Turn Signal": 1, "Parking": 1, "Right Turn Signal": 1 },
+        rear: { "Fog": 2, "Hazzard": 1, "Left Turn Signal": 1, "License": 1, "Parking": 1, "Reverse": 1, "Right Turn Signal": 1 },
+        left_side_parts: buildPartsState(LEFT_PARTS_NAMES, () => 1),
+        right_side_parts: buildPartsState(RIGHT_PARTS_NAMES, () => 1)
+    },
+    failed: {
+        cycle_state: 2, vin: "HQW247823",
+        front: { "DRL": 1, "Hazzard": 1, "Head High Beam": 0, "Head Low Beam": 1, "Left Turn Signal": 1, "Parking": 1, "Right Turn Signal": 1 },
+        rear: { "Fog": 2, "Hazzard": 1, "Left Turn Signal": 1, "License": 0, "Parking": 1, "Reverse": 1, "Right Turn Signal": 1 },
+        left_side_parts: buildPartsState(LEFT_PARTS_NAMES, i => (i % 6 === 0 ? 0 : i % 7 === 0 ? 3 : 1)),
+        right_side_parts: buildPartsState(RIGHT_PARTS_NAMES, i => (i % 6 === 2 ? 0 : i % 7 === 0 ? 3 : 1))
+    }
+};
+
+function applyMockState(stateName) {
+    const state = MOCK_STATES[stateName];
+    if (!state) return;
+    // Deep-clone so the warning sim (or any later mutation) doesn't poison the baseline.
+    cachedApiData = JSON.parse(JSON.stringify(state));
+    currentCycleState = cachedApiData.cycle_state || 0;
+    pairHoldUntil = {}; // reset pair completion holds for the new state
+    currentStructure = null; // force the gate in updateCheckboxes to rebuild
+    updateVinDisplay(cachedApiData.vin ?? '');
+    updateCheckboxes();
+}
+
+// The 6 lamps that "pass" one-by-one during the MOCK CAR ARRIVED sequence.
+const MOCK_SEQUENCE_LAMPS = [
+    { section: 'front', name: 'Left Turn Signal' },
+    { section: 'front', name: 'Right Turn Signal' },
+    { section: 'front', name: 'Hazzard' },
+    { section: 'rear', name: 'Left Turn Signal' },
+    { section: 'rear', name: 'Right Turn Signal' },
+    { section: 'rear', name: 'Hazzard' }
+];
+
+let mockSequenceTimeouts = [];
+
+function clearMockSequence() {
+    if (mockSequenceTimeouts.length) {
+        console.log('[MOCK SEQ] Cancelling in-progress sequence');
+    }
+    mockSequenceTimeouts.forEach(clearTimeout);
+    mockSequenceTimeouts = [];
+}
+
+function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
 // VIN and status tracking
 let currentVin = null;
 // Use a unique sentinel to distinguish "not yet received any API response" from "received status 2"
@@ -71,7 +251,8 @@ let lastOverallStatus = 'UNINITIALIZED';
 let statusPopoverTimeout = null;
 let countdownInterval = null;
 const COUNTDOWN_DURATION = 5; // 5 seconds
-const IS_MOCK_TEST_ENABLED = false; // Toggle this for deployment
+const IS_MOCK_TEST_ENABLED = true; // Toggle this for deployment
+let initialWarningFailures = null; // Track failures when warning first shows
 
 
 // DOM Elements
@@ -86,14 +267,13 @@ function updateCompletedCount() {
     console.log(`Checked: ${checkedCount}/${totalCheckboxes}`);
 }
 
-// Parts state mapping
-// 0 = grey (not eligible for current car)
-// 1 = blue (present in current car)
-// 2 = yellow (required but not present)
+// Parts state mapping — driven from the same value source as the lamps.
+// 0 = fail (red ✕), 1 = pass (green ✓), 2 = n/a (grey), 3 = warning (orange ⚠)
 const PARTS_STATES = {
-    0: 'not-eligible',  // grey
-    1: 'present',       // blue
-    2: 'required'       // yellow
+    0: 'fail',     // red ✕
+    1: 'pass',     // green ✓
+    2: 'na',       // grey
+    3: 'warning'   // orange ⚠
 };
 
 // Dynamically create checkboxes from API data
@@ -105,18 +285,10 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
         return;
     }
 
-    // Convert to array and sort by state for parts (required first, then present, then not-eligible)
-    // For lamps: failed (0) first, then passed (1), then not-applicable (2) at bottom
-    const items = Object.entries(sectionData).sort((a, b) => {
-        if (type === 'parts') {
-            // Sort order: 2 (required/yellow) first, then 1 (present/blue), then 0 (not-eligible/grey)
-            const order = { 2: 0, 1: 1, 0: 2 };
-            return (order[a[1]] ?? 3) - (order[b[1]] ?? 3);
-        }
-        // Lamps sort order: 0 (failed/red) first, then 1 (passed/green), then 2 (N/A/grey) at bottom
-        const lampOrder = { 0: 0, 1: 1, 2: 2 };
-        return (lampOrder[a[1]] ?? 3) - (lampOrder[b[1]] ?? 3);
-    });
+    // Iterate a FIXED row order (never status-sorted) so rows stay locked in
+    // place — status changes only repaint icon/color, they never reorder.
+    const items = getRowOrder(sectionName, type, sectionData)
+        .map(key => [key, sectionData[key]]);
 
     if (items.length === 0) {
         container.innerHTML = '<div class="no-items">No items</div>';
@@ -126,6 +298,59 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
     container.innerHTML = '';
 
     items.forEach(([key, value]) => {
+        // Blink-green pending state for the 6 whitelisted lamps in front/rear sections.
+        // Other lamps and all parts go through unmodified logic.
+        let blinkLampClass = null;
+        let enlargePair = false;
+        // The 3 synchronized lamp types (Left/Right Turn Signal, Hazzard) in
+        // front/rear. While pending they blink (via the shared
+        // body.blink-off-phase ticker). The 2x font stays on BOTH rows of the
+        // pair until BOTH the front and rear sides are ticked ✓ — so a side
+        // that ticks first stays enlarged (but stops blinking) until its
+        // partner also ticks.
+        const isBlinkPairLamp = type === 'lamps'
+            && BLINK_LAMP_SECTIONS.has(sectionName)
+            && BLINK_LAMP_KEYS.has(key);
+        if (isBlinkPairLamp) {
+            // Look up the partner row (same key in the opposite section).
+            const partnerSection = sectionName === 'front' ? 'rear' : 'front';
+            const partnerVal = cachedApiData && cachedApiData[partnerSection]
+                ? cachedApiData[partnerSection][key]
+                : undefined;
+            const isTicked = (v) => v === 1 || v === 3; // 3 (dim) counts as pass
+            const bothTicked = isTicked(value) && isTicked(partnerVal);
+
+            if (currentCycleState > 0) {
+                if (!bothTicked) {
+                    // Pair not complete — keep 2x font on both rows; clear any
+                    // stale hold so a re-opened pair behaves correctly.
+                    enlargePair = true;
+                    delete pairHoldUntil[key];
+                } else {
+                    // Both sides ✓ — start a short hold so the completed pair
+                    // stays green + enlarged briefly, then reverts together.
+                    if (pairHoldUntil[key] === undefined) {
+                        pairHoldUntil[key] = Date.now() + PAIR_HOLD_MS;
+                        // Trigger one rebuild after the hold so both rows revert
+                        // to normal in the same frame.
+                        setTimeout(() => {
+                            currentStructure = null;
+                            updateCheckboxes();
+                        }, PAIR_HOLD_MS + 50);
+                    }
+                    if (Date.now() < pairHoldUntil[key]) {
+                        enlargePair = true;
+                    }
+                }
+            }
+            // Blink only while THIS row is still pending.
+            if (value === 0 && currentCycleState > 0) {
+                blinkLampClass = 'lamp-state-blink-green';
+            } else if (value === 3) {
+                value = 1; // dim/partial counts as a pass for these lamps
+            }
+        }
+
         // Sanitize key for use in ID attribute (alphanumeric, hyphens, underscores only)
         const sanitizedKey = key.replace(/[^a-zA-Z0-9_-]/g, '-');
         const checkboxId = `${type}-${sectionName}-${sanitizedKey}`;
@@ -136,8 +361,8 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
         itemDiv.className = 'checklist-item';
 
         if (type === 'parts') {
-            // Parts have 3 states: grey (0), blue (1), yellow (2)
-            const stateClass = PARTS_STATES[value] || 'not-eligible';
+            // Parts have 4 states: fail (0), pass (1), n/a (2), warning (3)
+            const stateClass = PARTS_STATES[value] || 'na';
             itemDiv.classList.add(`parts-state-${stateClass}`);
             itemDiv.dataset.state = value;
 
@@ -183,6 +408,8 @@ function createChecklistColumn(container, sectionName, sectionData, type) {
             }
         }
 
+        if (enlargePair) itemDiv.classList.add('lamp-pair-enlarged');
+        if (blinkLampClass) itemDiv.classList.add(blinkLampClass);
         container.appendChild(itemDiv);
     });
 }
@@ -314,99 +541,139 @@ function showStatusPopover(status) {
     const popoverIcon = document.getElementById('popover-icon');
     const popoverText = document.getElementById('popover-text');
     const failedLampsContainer = document.getElementById('failed-lamps-container');
-    const failedLampsList = document.getElementById('failed-lamps-list');
-
-    console.log('[POPOVER] DOM elements found:', {
-        popover: !!popover,
-        popoverIcon: !!popoverIcon,
-        popoverText: !!popoverText
-    });
 
     if (!popover || !popoverIcon || !popoverText) {
-        console.error('[POPOVER] ERROR: Missing DOM elements! Cannot show popover.');
+        console.error('[POPOVER] ERROR: Missing DOM elements!');
         return;
     }
 
     // Clear any existing timeout
-    if (statusPopoverTimeout) {
-        console.log('[POPOVER] Clearing existing timeout');
-        clearTimeout(statusPopoverTimeout);
-    }
+    if (statusPopoverTimeout) clearTimeout(statusPopoverTimeout);
+    if (countdownInterval) clearInterval(countdownInterval);
 
     // Set icon and text based on status
-    // 0 = OK (passed), 1 = NG (failed)
-    const isSuccess = status === 0;
+    popoverIcon.className = 'popover-icon';
+    popoverText.className = 'popover-text';
 
-    console.log('[POPOVER] Setting up popover display:', isSuccess ? 'PASSED (0)' : 'FAILED (1)');
+    let duration = 5; // Default 5s
 
-    popoverIcon.className = 'popover-icon ' + (isSuccess ? 'success' : 'failure');
-    popoverText.className = 'popover-text ' + (isSuccess ? 'success' : 'failure');
-    popoverText.textContent = isSuccess ? 'PASSED' : 'PLEASE RETRY';
+    if (status === 0) {
+        popoverIcon.classList.add('success');
+        popoverText.classList.add('success');
+        popoverText.textContent = 'PASSED';
+        if (failedLampsContainer) failedLampsContainer.style.display = 'none';
+    } else if (status === 1) {
+        popoverIcon.classList.add('failure');
+        popoverText.classList.add('failure');
+        popoverText.textContent = 'FAILED';
+        updatePopoverFailedLamps(false);
+    } else if (status === 3) {
+        popoverIcon.classList.add('warning');
+        popoverText.classList.add('warning');
+        popoverText.textContent = 'PLEASE RETRY';
+        duration = 10; // 10s for Warning
 
-    // Handle failed lamps display
-    if (failedLampsContainer && failedLampsList) {
-        if (!isSuccess) {
-            // Get failed lamps and display them
-            const failedLamps = getFailedLamps();
-            console.log('[POPOVER] Failed lamps:', failedLamps);
-
-            if (failedLamps.length > 0) {
-                // Clear existing content safely
-                failedLampsList.innerHTML = '';
-
-                // Create elements safely using textContent to prevent XSS
-                failedLamps.forEach(lamp => {
-                    const item = document.createElement('div');
-                    item.className = 'failed-lamp-item';
-
-                    const xSpan = document.createElement('span');
-                    xSpan.className = 'failed-lamp-x';
-                    xSpan.textContent = 'X';
-
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'failed-lamp-name';
-                    nameSpan.textContent = lamp.name;
-
-                    const sectionSpan = document.createElement('span');
-                    sectionSpan.className = 'failed-lamp-section';
-                    sectionSpan.textContent = `(${lamp.section})`;
-
-                    item.appendChild(xSpan);
-                    item.appendChild(nameSpan);
-                    item.appendChild(sectionSpan);
-                    failedLampsList.appendChild(item);
-                });
-                failedLampsContainer.style.display = 'block';
-            } else {
-                failedLampsContainer.style.display = 'none';
-            }
-
-        } else {
-            // Hide failed lamps for success
-            failedLampsContainer.style.display = 'none';
-        }
+        // Capture initial failures to track live progress
+        initialWarningFailures = getFailedLamps();
+        updatePopoverFailedLamps(true);
     }
 
     // Show popover
-    console.log('[POPOVER] Adding "show" class to popover');
     popover.classList.add('show');
 
-    // Start circular countdown timer
-    startCountdown();
+    // Start countdown timer
+    startCountdown(duration);
 
-    // Auto-hide popover after countdown for all states (Success and Failure)
+    // Auto-hide popover after countdown
     statusPopoverTimeout = setTimeout(() => {
-        console.log('[POPOVER] Auto-hiding popover after countdown');
-        popover.classList.remove('show');
-        if (countdownInterval) clearInterval(countdownInterval);
-    }, COUNTDOWN_DURATION * 1000);
+        console.log('[POPOVER] Timer expired for status:', status);
+
+        // Special case: If Warning (3) expires and we're still in Warning state, show NG (1) if failures persist
+        if (status === 3 && lastOverallStatus === 3) {
+            const currentFailures = getFailedLamps();
+            if (currentFailures.length > 0) {
+                console.log('[POPOVER] Warning timeout with failures - switching to FAILED state');
+                handleStatusChange(1);
+            } else {
+                console.log('[POPOVER] Warning timeout but NO failures - switching to PASSED state');
+                handleStatusChange(0);
+            }
+        } else {
+            popover.classList.remove('show');
+            if (countdownInterval) clearInterval(countdownInterval);
+        }
+    }, duration * 1000);
+}
+
+// Live-update the failed lamps list inside the popover
+function updatePopoverFailedLamps(isWarningMode) {
+    const failedLampsList = document.getElementById('failed-lamps-list');
+    const failedLampsContainer = document.getElementById('failed-lamps-container');
+    if (!failedLampsList || !failedLampsContainer) return;
+
+    // Current failures from backend
+    const currentFailures = getFailedLamps();
+    console.log('[POPOVER] Updating failed lamps list. Current count:', currentFailures.length);
+
+    // If we're in warning mode, we compare current failures with initial failures
+    // to show green (passed) or red (failed)
+    let displayItems = [];
+
+    if (isWarningMode && initialWarningFailures) {
+        // We want to show ALL items that were initially failed
+        initialWarningFailures.forEach(initialItem => {
+            const isStillFailing = currentFailures.some(f => f.name === initialItem.name && f.section === initialItem.section);
+            displayItems.push({
+                ...initialItem,
+                status: isStillFailing ? 'failed' : 'passed'
+            });
+        });
+    } else {
+        // Normal mode (NG status 1 or first time status 3)
+        displayItems = currentFailures.map(f => ({ ...f, status: 'failed' }));
+    }
+
+    if (displayItems.length > 0) {
+        failedLampsList.innerHTML = '';
+
+        displayItems.forEach(item => {
+            const div = document.createElement('div');
+            div.className = `failed-lamp-item status-${item.status}`;
+
+            // If it's warning mode but not yet "passed", use orange
+            if (isWarningMode && item.status === 'failed') {
+                div.classList.remove('status-failed');
+                div.classList.add('status-warning');
+            }
+
+            const xSpan = document.createElement('span');
+            xSpan.className = 'failed-lamp-x';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'failed-lamp-name';
+            nameSpan.textContent = item.name;
+
+            const sectionSpan = document.createElement('span');
+            sectionSpan.className = 'failed-lamp-section';
+            sectionSpan.textContent = `(${item.section})`;
+
+            div.appendChild(xSpan);
+            div.appendChild(nameSpan);
+            div.appendChild(sectionSpan);
+            failedLampsList.appendChild(div);
+        });
+
+        failedLampsContainer.style.display = 'block';
+    } else {
+        failedLampsContainer.style.display = 'none';
+    }
 }
 
 // Circular countdown timer logic
-function startCountdown() {
+function startCountdown(duration) {
     const timerText = document.getElementById('timer-text');
     const timerProgress = document.getElementById('timer-progress');
-    let timeLeft = COUNTDOWN_DURATION;
+    let timeLeft = duration;
 
     // Total circumference for r=45 is ~283
     const circumference = 2 * Math.PI * 45;
@@ -426,7 +693,7 @@ function startCountdown() {
         if (timerText) timerText.textContent = timeLeft;
 
         if (timerProgress) {
-            const offset = circumference - (timeLeft / COUNTDOWN_DURATION) * circumference;
+            const offset = circumference - (timeLeft / duration) * circumference;
             timerProgress.style.strokeDashoffset = offset;
         }
 
@@ -436,32 +703,196 @@ function startCountdown() {
     }, 1000);
 }
 
+// DEMO Pass banner helpers
+function showPassBanner() {
+    const banner = document.getElementById('pass-banner');
+    if (banner) banner.classList.add('show');
+}
+
+function hidePassBanner() {
+    const banner = document.getElementById('pass-banner');
+    if (banner) banner.classList.remove('show');
+}
+
+// DEMO sequence: the 3 lamp pairs (Left Turn, Right Turn, Hazzard) blink green,
+// then each PAIR passes — front + rear ticked together so the two ✓ marks
+// appear simultaneously — in random order (1.5–2.5s between pairs). Each
+// completed pair holds its green/enlarged look briefly, then reverts. After
+// all pairs pass, the full-screen PASS popup shows.
+function triggerDemo() {
+    console.log('[DEMO] Starting demo sequence');
+    clearMockSequence();
+    hidePassBanner();
+
+    // Car enters: cycle active so the 6 whitelisted lamps blink green,
+    // every other lamp renders at its normal state.
+    applyMockState('cycleActive');
+    lastOverallStatus = 2;
+    closeStatusPopover();
+    updateCycleStatusBanner(2);
+
+    const pairs = shuffleArray([...BLINK_LAMP_KEYS]);
+    let cumulativeDelay = 0;
+    let passedCount = 0;
+
+    pairs.forEach((key) => {
+        const stepDelay = 1500 + Math.random() * 1000; // 1.5–2.5s per pair
+        cumulativeDelay += stepDelay;
+
+        const tid = setTimeout(() => {
+            if (!cachedApiData || !cachedApiData.front || !cachedApiData.rear) return;
+
+            // Tick BOTH sides of the pair in the same frame → simultaneous ✓.
+            cachedApiData.front[key] = 1;
+            cachedApiData.rear[key] = 1;
+            console.log(`${key} passed (front + rear)`);
+
+            currentStructure = null;
+            updateCheckboxes();
+
+            passedCount++;
+            if (passedCount === pairs.length) {
+                console.log('[DEMO] All pairs passed');
+                // Wait 3s after the final pair completes before showing the
+                // PASS popup (the last pair's ~1.5s hold finishes within this).
+                const passDelay = 3000;
+                const passTid = setTimeout(() => handleStatusChange(0), passDelay);
+                mockSequenceTimeouts.push(passTid);
+            }
+        }, cumulativeDelay);
+
+        mockSequenceTimeouts.push(tid);
+    });
+
+    console.log(`[DEMO] Scheduled ${pairs.length} pairs over ~${(cumulativeDelay / 1000).toFixed(1)}s`);
+}
+
 // Mock test functionality for local testing
+function triggerMockReset() {
+    console.log('[MOCK] Triggering mock RESET (idle)');
+    clearMockSequence();
+    applyMockState('idle');
+    lastOverallStatus = 'UNINITIALIZED';
+    closeStatusPopover();
+    updateCycleStatusBanner(2);
+}
+
+function triggerMockCarArrived() {
+    console.log('[MOCK] Triggering mock CAR ARRIVED sequence');
+    clearMockSequence();
+
+    // Step 1: car enters, cycle starts, 6 lamps begin blinking green
+    applyMockState('cycleActive');
+    lastOverallStatus = 'UNINITIALIZED';
+    closeStatusPopover();
+    updateCycleStatusBanner(2);
+
+    // Step 2: pass the 6 blinking lamps in random order, 1.5-2.5s between each
+    const order = shuffleArray(MOCK_SEQUENCE_LAMPS);
+    let cumulativeDelay = 0;
+
+    order.forEach((lamp, idx) => {
+        const stepDelay = 1500 + Math.random() * 1000; // 1.5-2.5s
+        cumulativeDelay += stepDelay;
+        const isLast = idx === order.length - 1;
+
+        const tid = setTimeout(() => {
+            if (!cachedApiData || !cachedApiData[lamp.section]) return;
+
+            console.log(`[MOCK SEQ] ✓ ${lamp.section.toUpperCase()} ${lamp.name} PASSED (${idx + 1}/${order.length})`);
+            cachedApiData[lamp.section][lamp.name] = 1;
+
+            // Step 3 prep: on the last lamp, sweep any remaining failing
+            // non-blink lamps to green so the PASS state is consistent.
+            if (isLast) {
+                ['front', 'rear'].forEach(section => {
+                    if (!cachedApiData[section]) return;
+                    for (const key in cachedApiData[section]) {
+                        if (cachedApiData[section][key] === 0) {
+                            cachedApiData[section][key] = 1;
+                        }
+                    }
+                });
+            }
+
+            currentStructure = null;
+            updateCheckboxes();
+
+            // Step 3: fire the PASSED popover a beat after the last lamp turns green
+            if (isLast) {
+                console.log('[MOCK SEQ] All lamps verified — triggering PASS');
+                const passTid = setTimeout(() => handleStatusChange(0), 600);
+                mockSequenceTimeouts.push(passTid);
+            }
+        }, cumulativeDelay);
+
+        mockSequenceTimeouts.push(tid);
+    });
+
+    console.log(`[MOCK SEQ] Scheduled ${order.length} lamps to pass over ~${(cumulativeDelay / 1000).toFixed(1)}s`);
+}
+
 function triggerMockPass() {
     console.log('[MOCK] Triggering mock PASS');
-    cachedApiData = {
-        front: { "High Beam LH": 1, "High Beam RH": 1, "Low Beam LH": 1, "Low Beam RH": 1 },
-        rear: { "Tail Lamp LH": 1, "Tail Lamp RH": 1, "Brake Light": 1 }
-    };
+    clearMockSequence();
+    applyMockState('allPassed');
     lastOverallStatus = 'UNINITIALIZED';
     handleStatusChange(0);
 }
 
 function triggerMockFail() {
     console.log('[MOCK] Triggering mock FAIL');
-    cachedApiData = {
-        front: {
-            "High Beam LH": 0,
-            "Low Beam RH": 1,
-            "Turn Signal LH": 0
-        },
-        rear: {
-            "Tail Lamp RH": 1,
-            "Brake Light": 0
-        }
-    };
+    clearMockSequence();
+    applyMockState('failed');
     lastOverallStatus = 'UNINITIALIZED';
     handleStatusChange(1);
+}
+
+function triggerMockWarning() {
+    console.log('[MOCK] Triggering mock WARNING (10s)');
+    clearMockSequence();
+
+    // Start from a state with several lamps still pending
+    applyMockState('cycleActive');
+    lastOverallStatus = 'UNINITIALIZED';
+    handleStatusChange(3);
+
+    // After 3 seconds, simulate Left Turn Signal passing
+    setTimeout(() => {
+        if (lastOverallStatus === 3) {
+            console.log('[MOCK] Simulating Front Left Turn Signal PASSED');
+            cachedApiData.front["Left Turn Signal"] = 1;
+            currentStructure = null;
+            updateCheckboxes();
+            handleStatusChange(3);
+        }
+    }, 3000);
+
+    // After 6 seconds, simulate Right Turn Signal passing
+    setTimeout(() => {
+        if (lastOverallStatus === 3) {
+            console.log('[MOCK] Simulating Front Right Turn Signal PASSED');
+            cachedApiData.front["Right Turn Signal"] = 1;
+            currentStructure = null;
+            updateCheckboxes();
+            handleStatusChange(3);
+        }
+    }, 6000);
+
+    // After 9 seconds, transition to success
+    setTimeout(() => {
+        if (lastOverallStatus === 3) {
+            console.log('[MOCK] Simulating remaining lamps PASSED');
+            cachedApiData.front["Hazzard"] = 1;
+            cachedApiData.front["Head High Beam"] = 1;
+            cachedApiData.rear["Hazzard"] = 1;
+            cachedApiData.rear["Left Turn Signal"] = 1;
+            cachedApiData.rear["Right Turn Signal"] = 1;
+            currentStructure = null;
+            updateCheckboxes();
+            handleStatusChange(0);
+        }
+    }, 9000);
 }
 
 // Update persistent cycle status banner
@@ -484,10 +915,31 @@ function updateCycleStatusBanner(status) {
     }
 }
 
-// Check if status changed and show popover
-// Status: 0 = OK (passed), 1 = NG (failed), 2 = Wait (no popover)
+function reloadVideoStream() {
+    document.querySelectorAll('.quadrant-stream').forEach(img => {
+        const baseUrl = getLiveVideoUrl();
+        img.src = baseUrl + '?t=' + Date.now();
+    });
+}
+
+let lastSrcMap = new Map()
+
+setInterval(()=> {
+    document.querySelectorAll('.quadrant-stream').forEach(img=> {
+        const current = img.src
+
+        if (lastSrcMap.get(img) === current || img.naturalWidth === 0) {
+            const baseUrl = getLiveVideoUrl();
+            img.src = baseUrl + '?t=' + Date.now();
+        }
+
+        lastSrcMap.set(img, current)
+    })
+}, 5000);
+
+// Status: 0 = OK (passed), 1 = NG (failed), 2 = Wait (no popover), 3 = Warning (retry)
 function handleStatusChange(newStatus) {
-    const statusNames = { 0: 'OK', 1: 'NG', 2: 'WAIT' };
+    const statusNames = { 0: 'OK', 1: 'NG', 2: 'WAIT', 3: 'WARNING' };
 
     // Check if this is the first API response (before any status was received)
     const isFirstResponse = lastOverallStatus === 'UNINITIALIZED';
@@ -504,36 +956,59 @@ function handleStatusChange(newStatus) {
     // Always update the persistent banner regardless of status
     updateCycleStatusBanner(newStatus);
 
-    // Status 2 means waiting - don't show popover
+    const popover = document.getElementById('status-popover');
+    const isPopoverVisible = popover && popover.classList.contains('show');
+
+    // Status 2 means waiting
     if (newStatus === 2) {
-        console.log('[STATUS] Wait state (2) received - no popover will be shown');
+        // If a popover is currently showing, DON'T close it early.
+        // Let it finish its countdown (5s or 10s) even if backend goes to Wait.
+        if (isPopoverVisible) {
+            console.log('[STATUS] Wait state (2) ignored - popover is currently active');
+            lastOverallStatus = newStatus;
+            return;
+        }
+
+        console.log('[STATUS] Wait state (2) received - cleaning up popovers');
+        closeStatusPopover();
         lastOverallStatus = newStatus;
         return;
     }
 
-    // Show popover if:
-    // 1. This is the first valid (0 or 1) API response, OR
-    // 2. Status changed from a previous valid status
-    const isPassOrFail = newStatus === 0 || newStatus === 1;
-    const statusChanged = !isFirstResponse && lastOverallStatus !== newStatus;
-    const shouldShowPopover = isPassOrFail && (isFirstResponse || statusChanged);
+    // Logic for showing/updating popover
+    const isSpecialStatus = newStatus === 0 || newStatus === 1 || newStatus === 3;
 
-    console.log('[STATUS] Should show popover?', shouldShowPopover, {
-        isFirstResponse: isFirstResponse,
-        statusChanged: statusChanged,
-        isPassOrFail: isPassOrFail
-    });
+    // If we're already in Warning state (3), and receive 3 again, just update the list
+    if (newStatus === 3 && lastOverallStatus === 3) {
+        console.log('[STATUS] Continued Warning (3) - updating popup list');
+        updatePopoverFailedLamps(true);
+        return;
+    }
 
-    if (shouldShowPopover) {
+    // If it's a stable status (0 or 1) and same as before, ignore to prevent restarts
+    if ((newStatus === 0 || newStatus === 1) && lastOverallStatus === newStatus && isPopoverVisible) {
+        console.log(`[STATUS] Stable status (${newStatus}) same as before - ignoring restart`);
+        return;
+    }
+
+    if (isSpecialStatus) {
         console.log('[STATUS] >>> CALLING showStatusPopover with status:', newStatus);
         showStatusPopover(newStatus);
-    } else {
-        console.log('[STATUS] NOT showing popover. Reasons:', {
-            sameAsPrevious: !isFirstResponse && lastOverallStatus === newStatus,
-            invalidStatus: !isPassOrFail
-        });
     }
+
+    if (!isFirstResponse && lastOverallStatus !== newStatus) {
+        reloadVideoStream();
+    }
+
     lastOverallStatus = newStatus;
+}
+
+// Close popover and stop timers
+function closeStatusPopover() {
+    const popover = document.getElementById('status-popover');
+    if (popover) popover.classList.remove('show');
+    if (statusPopoverTimeout) clearTimeout(statusPopoverTimeout);
+    if (countdownInterval) clearInterval(countdownInterval);
 }
 
 // Fetch VIN from separate endpoint
@@ -542,7 +1017,7 @@ async function fetchVinNumber() {
     console.log('[API] Fetching VIN:', url);
 
     try {
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -569,7 +1044,7 @@ async function fetchOverallStatus() {
     console.log('[API] POST overall_status:', url, 'payload:', JSON.stringify(payload));
 
     try {
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -604,13 +1079,16 @@ async function fetchOverallStatus() {
     }
 }
 
-// Fetch status from unified endpoint
+// Fetch status from unified endpoint.
+// Returns true if the primary /light_status call succeeded, false otherwise,
+// so the poller can decide whether to back off.
 async function fetchStatus() {
     const url = getStatusUrl();
     console.log('[API] Fetching:', url);
 
+    let ok = false;
     try {
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -620,8 +1098,10 @@ async function fetchStatus() {
         console.log('[API] Response received');
 
         cachedApiData = data;
+        currentCycleState = Number(data.cycle_state) || 0;
 
         updateCheckboxes();
+        ok = true;
     } catch (error) {
         console.error('[API] Error fetching status:', error);
     }
@@ -631,6 +1111,8 @@ async function fetchStatus() {
 
     // Fetch overall_status from separate endpoint
     await fetchOverallStatus();
+
+    return ok;
 }
 
 // Update checkboxes based on API data
@@ -638,18 +1120,18 @@ function updateCheckboxes() {
     try {
         if (!cachedApiData) return;
 
+        // Skip DOM rebuild when nothing changed — prevents the blink-green
+        // CSS animation from restarting on every 1s poll.
+        const newStructure = JSON.stringify(cachedApiData);
+        if (currentStructure === newStructure) return;
+        currentStructure = newStructure;
+
         // Map API data to new sections (lamps top, parts bottom)
         const { frontLamps, rearLamps, leftParts, rightParts } = mapApiDataToSections(cachedApiData);
 
-        // Always recreate to ensure proper sorting based on current state
         createCheckboxesFromData(frontLamps, rearLamps, leftParts, rightParts);
 
-        // Update the structure tracking
-        const newStructure = JSON.stringify(cachedApiData);
-        if (currentStructure !== newStructure) {
-            currentStructure = newStructure;
-            console.log('Structure updated');
-        }
+        console.log('Structure updated');
 
         updateCompletedCount();
     } catch (error) {
@@ -712,9 +1194,18 @@ async function loadLiveVideos() {
             }
 
             const img = document.createElement('img');
-            img.src = streamUrl;
+            // img.src = streamUrl;
+            img.src = streamUrl + '?t=' + Date.now();
             img.className = 'quadrant-stream';
             img.alt = `${quad.toUpperCase()} VIEW`;
+
+            img.onerror = () => {
+                console.log('[VIDEO] Stream lost. Retrying...');
+                setTimeout(() => {
+                    const baseUrl = getLiveVideoUrl();
+                    img.src = baseUrl + '?t=' + Date.now();
+                }, 1000);
+            };
 
             quadContainer.appendChild(img);
             wrapper.appendChild(quadContainer);
@@ -775,9 +1266,10 @@ function handleBoothChange(port, updateUrl = true) {
         vinCodeElement.textContent = '--';
     }
 
-    // Reload everything for the new booth
+    // Reload everything for the new booth — restart the poll loop so backoff
+    // state resets and we don't leave a stale request in flight.
     loadLiveVideos();
-    fetchStatus();
+    startPolling();
 }
 
 // Initialize booth selector
@@ -788,13 +1280,11 @@ if (boothSelect) {
     });
 }
 
-// Initialize mock test buttons
-const mockPassBtn = document.getElementById('mock-pass-btn');
-const mockFailBtn = document.getElementById('mock-fail-btn');
+// Initialize DEMO button
+const demoBtn = document.getElementById('demo-btn');
 const mockTestContainer = document.querySelector('.mock-test-container');
 
-if (mockPassBtn) mockPassBtn.addEventListener('click', triggerMockPass);
-if (mockFailBtn) mockFailBtn.addEventListener('click', triggerMockFail);
+if (demoBtn) demoBtn.addEventListener('click', triggerDemo);
 
 if (mockTestContainer) {
     if (IS_MOCK_TEST_ENABLED) {
@@ -843,11 +1333,72 @@ console.log(`Starting with Booth ${initialBooth} (port ${currentPort})`);
 // Load live videos on initialization
 loadLiveVideos();
 
+// Start the single shared blink ticker (drives all synchronized lamp blinks)
+startBlinkTicker();
+
+// In mock mode, seed the dashboard with the idle state so the lamp cards
+// render immediately (instead of showing empty placeholders when the
+// backend is unreachable).
+if (IS_MOCK_TEST_ENABLED) {
+    applyMockState('idle');
+    updateCycleStatusBanner(2);
+}
+
+// Self-scheduling poll loop (replaces setInterval) so requests can never
+// overlap — the next poll is only scheduled after the current one settles.
+// On repeated failures (backend down / socket dropped) it backs off
+// exponentially up to MAX_BACKOFF, then snaps back to POLL_INTERVAL once a
+// request succeeds again — i.e. reconnect-on-close with backoff.
+let pollTimer = null;
+let pollInFlight = false;
+let pollFailures = 0;
+
+async function pollOnce() {
+    if (pollInFlight) return; // guard: don't fire while one is still running
+    pollInFlight = true;
+
+    let ok = false;
+    try {
+        ok = await fetchStatus();
+    } catch (error) {
+        // fetchStatus already swallows its own errors; this is just a safety net.
+        console.error('[POLL] Unexpected poll error:', error);
+    } finally {
+        pollInFlight = false;
+    }
+
+    if (ok) {
+        if (pollFailures > 0) {
+            console.log('[POLL] Connection restored — resuming normal interval');
+        }
+        pollFailures = 0;
+    } else {
+        pollFailures++;
+    }
+
+    // Exponential backoff on failure: 1s, 2s, 4s, 8s, capped at MAX_BACKOFF.
+    const delay = ok
+        ? POLL_INTERVAL
+        : Math.min(POLL_INTERVAL * (2 ** pollFailures), MAX_BACKOFF);
+
+    if (pollFailures > 0) {
+        console.log(`[POLL] Retry in ${delay}ms (consecutive failures: ${pollFailures})`);
+    }
+
+    pollTimer = setTimeout(pollOnce, delay);
+}
+
+function startPolling() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollFailures = 0;
+    pollInFlight = false;
+    pollOnce();
+}
+
 // Start polling for status from API
 // Small delay on first fetch to ensure DOM and CSS are fully rendered
 // This prevents the popup from showing before the page is visually ready
 setTimeout(() => {
     console.log('[INIT] Starting first status fetch after DOM stabilization delay');
-    fetchStatus();
-    setInterval(fetchStatus, POLL_INTERVAL);
+    startPolling();
 }, 100);
